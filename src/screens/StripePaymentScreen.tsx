@@ -61,7 +61,7 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: plan.price * 100, // Stripe expects amount in cents
+          amount: Math.round(plan.price * 100), // Stripe expects amount in cents
           currency: 'usd',
           planType,
           email: user?.email,
