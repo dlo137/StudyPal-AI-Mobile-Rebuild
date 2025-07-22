@@ -56,8 +56,8 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
         return;
       }
       // 1. Create payment intent on your backend
-      // Replace with your backend endpoint
-      const response = await fetch('https://your-backend.com/create-payment-intent', {
+      // Updated to use Vercel deployment URL
+      const response = await fetch('https://stud-pal-ai-mobile-rebuild-xktk.vercel.app/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
