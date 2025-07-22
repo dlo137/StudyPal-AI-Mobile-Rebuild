@@ -34,7 +34,7 @@
     "react-native-screens": "~4.11.1",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "^0.20.0",
-    "stripe": "^12.0.0"
+    "stripe": "^14.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -46,3 +46,4 @@
   },
   "private": true
 }
+J
