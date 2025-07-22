@@ -6,7 +6,10 @@ module.exports = async (req, res) => {
   }
 
   // Load Stripe secret key from environment variables
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  let stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (stripeSecretKey) {
+    stripeSecretKey = stripeSecretKey.trim();
+  }
   console.log("Vercel Stripe Key:", stripeSecretKey);
   if (!stripeSecretKey) {
     return res.status(500).json({ error: 'Missing STRIPE_SECRET_KEY in environment variables.' });
