@@ -10,11 +10,21 @@ module.exports = async (req, res) => {
   if (stripeSecretKey) {
     stripeSecretKey = stripeSecretKey.trim();
   }
-  console.log("Vercel Stripe Key:", stripeSecretKey);
+  
+  // Enhanced debugging
+  console.log("Environment variables available:", Object.keys(process.env).filter(key => key.includes('STRIPE')));
+  console.log("Stripe key exists:", !!stripeSecretKey);
+  console.log("Stripe key length:", stripeSecretKey ? stripeSecretKey.length : 0);
+  console.log("Stripe key starts with sk_:", stripeSecretKey ? stripeSecretKey.startsWith('sk_') : false);
+  
   if (!stripeSecretKey) {
     return res.status(500).json({ error: 'Missing STRIPE_SECRET_KEY in environment variables.' });
   }
-  const stripe = Stripe(stripeSecretKey);
+
+  // Initialize Stripe instance fresh each time
+  const stripe = Stripe(stripeSecretKey, {
+    apiVersion: '2023-10-16', // Use a specific API version
+  });
 
   let body;
   try {
@@ -33,14 +43,19 @@ module.exports = async (req, res) => {
   }
 
   try {
+    console.log("Creating payment intent with amount:", amount, "currency:", currency);
+    
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
       metadata: { planType: planType || '', email },
       automatic_payment_methods: { enabled: true },
     });
+    
+    console.log("Payment intent created successfully:", paymentIntent.id);
     return res.status(200).json({ clientSecret: paymentIntent.client_secret });
   } catch (error) {
+    console.error("Stripe error:", error.type, error.message);
     return res.status(400).json({ error: error.message });
   }
 };
