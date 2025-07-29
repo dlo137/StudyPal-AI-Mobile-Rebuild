@@ -5,6 +5,7 @@ import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { LogBox } from 'react-native';
 
 
 import LoginScreen from './src/screens/loginScreen';
@@ -14,6 +15,8 @@ import MissionScreen from './src/screens/missionScreen';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 
+
+LogBox.ignoreLogs(['Unsupported top level event type \"topInsetsChange\" dispatched']);
 
 const Stack = createNativeStackNavigator();
 

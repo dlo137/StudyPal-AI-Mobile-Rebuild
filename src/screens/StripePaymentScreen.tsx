@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,7 @@ interface PlanDetails {
 const PLAN_DETAILS: Record<PlanType, PlanDetails> = {
   gold: {
     name: 'Gold Plan',
-    price: 9.99,
+    price: 4.99,
     features: [
       '150 Requests / Monthly',
       'Email Support',
@@ -24,7 +25,7 @@ const PLAN_DETAILS: Record<PlanType, PlanDetails> = {
   },
   diamond: {
     name: 'Diamond Plan',
-    price: 19.99,
+    price: 9.99,
     features: [
       '500 Requests / Monthly',
       'Email Support',
@@ -34,8 +35,20 @@ const PLAN_DETAILS: Record<PlanType, PlanDetails> = {
   },
 };
 
-const StripePaymentScreen = ({ route, navigation }: any) => {
-  const { planType } = route.params as { planType: PlanType };
+// Add type declaration for global.fetchPlanAndUsage
+declare global {
+  // eslint-disable-next-line no-var
+  var fetchPlanAndUsage: (() => Promise<void>) | undefined;
+}
+
+interface StripePaymentScreenProps {
+  route: { params: { planType: PlanType } };
+  navigation: { goBack: () => void };
+}
+
+const StripePaymentScreen = ({ route, navigation }: StripePaymentScreenProps) => {
+  // Local state for planType to ensure UI updates after fetch
+  const { planType: initialPlanType } = route.params;
   const { theme } = useTheme();
   const { user } = useAuth();
   const { confirmPayment } = useStripe();
@@ -43,8 +56,37 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [succeeded, setSucceeded] = useState(false);
+  const [currentPlanType, setCurrentPlanType] = useState<PlanType>(initialPlanType);
 
-  const plan: PlanDetails = PLAN_DETAILS[planType] ?? PLAN_DETAILS.gold;
+  // Ensure global.fetchPlanAndUsage is defined only once and always has access to latest user
+  React.useEffect(() => {
+    global.fetchPlanAndUsage = async () => {
+      if (!user?.id) return;
+      try {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('plan_type')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profileError) {
+          console.log('❌ Error fetching user plan:', profileError.message);
+        } else {
+          console.log('[DEBUG] Refetched plan_type from Supabase:', profileData?.plan_type);
+          if (profileData?.plan_type && (profileData.plan_type === 'gold' || profileData.plan_type === 'diamond')) {
+            setCurrentPlanType(profileData.plan_type);
+          }
+        }
+      } catch (err) {
+        console.log('❌ Exception in fetchPlanAndUsage:', err);
+      }
+    };
+  }, [user]);
+
+  // Always show diamond plan as $0.50 for testing
+  const plan: PlanDetails =
+    currentPlanType === 'diamond'
+      ? { ...PLAN_DETAILS.diamond, price: 0.50 }
+      : PLAN_DETAILS[currentPlanType] ?? PLAN_DETAILS.gold;
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -56,14 +98,13 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
         return;
       }
       // 1. Create payment intent on your backend
-      // Updated to use Vercel deployment URL
       const response = await fetch('https://stud-pal-ai-mobile-rebuild-xktk.vercel.app/api/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: Math.round(plan.price * 100), // Stripe expects amount in cents
           currency: 'usd',
-          planType,
+          planType: currentPlanType,
           email: user?.email,
         }),
       });
@@ -86,6 +127,51 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
         return;
       }
       if (paymentIntent) {
+        // Update user's plan in Supabase
+        if (user?.id && currentPlanType) {
+          try {
+            console.log('[DEBUG] Attempting Supabase update for user:', user);
+            let updateResult = await supabase
+              .from('profiles')
+              .update({ plan_type: currentPlanType })
+              .eq('id', user.id);
+            if (updateResult.error) {
+              console.log('[DEBUG] Supabase update by id error:', updateResult.error.message);
+              // Try updating by email if id fails
+              if (user.email) {
+                console.log('[DEBUG] Trying Supabase update by email:', user.email);
+                updateResult = await supabase
+                  .from('profiles')
+                  .update({ plan_type: currentPlanType })
+                  .eq('email', user.email);
+                if (updateResult.error) {
+                  console.log('[DEBUG] Supabase update by email error:', updateResult.error.message);
+                } else {
+                  console.log('[DEBUG] Supabase update by email succeeded for:', user.email);
+                }
+              }
+            } else {
+              console.log('[DEBUG] Supabase update by id succeeded for user id:', user.id);
+            }
+            // Log current plan_type after update
+            const { data: afterUpdate, error: afterUpdateError } = await supabase
+              .from('profiles')
+              .select('plan_type')
+              .eq('id', user.id)
+              .maybeSingle();
+            if (afterUpdateError) {
+              console.log('[DEBUG] Error fetching plan_type after update:', afterUpdateError.message);
+            } else {
+              console.log('[DEBUG] plan_type after update:', afterUpdate?.plan_type);
+            }
+            // Immediately refetch plan type after update
+            if (typeof global.fetchPlanAndUsage === 'function') {
+              await global.fetchPlanAndUsage();
+            }
+          } catch (err) {
+            console.log('❌ Error updating plan_type in Supabase:', err);
+          }
+        }
         setSucceeded(true);
       }
       setIsProcessing(false);
@@ -99,19 +185,18 @@ const StripePaymentScreen = ({ route, navigation }: any) => {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.card }}>
         <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={theme.card} />
-        <View style={[styles.modalContainer, { backgroundColor: theme.card, borderColor: theme.accent }]}> 
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.card }}>
+          <View style={{ alignItems: 'center', backgroundColor: theme.card, borderRadius: 18, padding: 24, borderColor: theme.accent, borderWidth: 1, elevation: 2 }}> 
             {/* Success Icon */}
             <View style={{ backgroundColor: '#e6ffed', borderRadius: 24, padding: 8, marginBottom: 8 }}>
-              {/* You can use a check icon from react-native-vector-icons or similar */}
               <Text style={{ fontSize: 32, color: 'green' }}>✔️</Text>
             </View>
             <Text style={[styles.successTitle, { color: theme.text }]}>Payment Successful!</Text>
             <Text style={[styles.successDesc, { color: theme.textSecondary }]}>Welcome to {plan.name}! Your subscription is now active.</Text>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.accent, marginTop: 16 }]} onPress={() => navigation.goBack()}>
+              <Text style={{ color: theme.text, fontWeight: 'bold' }}>Close</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.accent }]} onPress={() => navigation.goBack()}>
-            <Text style={{ color: theme.text, fontWeight: 'bold' }}>Close</Text>
-          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

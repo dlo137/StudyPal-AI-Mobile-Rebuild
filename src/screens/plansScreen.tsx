@@ -26,7 +26,7 @@ const plans = [
   {
     key: 'gold',
     title: 'Gold Plan',
-    price: '$9.99/mo',
+    price: '$4.99/mo',
     features: [
       '150 Requests / Monthly',
       'Email Support',
@@ -38,7 +38,7 @@ const plans = [
   {
     key: 'diamond',
     title: 'Diamond Plan',
-    price: '$19.99/mo',
+    price: '$9.99/mo',
     features: [
       '500 Requests / Monthly',
       'Email Support',
@@ -61,6 +61,7 @@ const PlansScreen = ({ navigation }: any) => {
   const { user } = useAuth();
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [showPlanUpgrade, setShowPlanUpgrade] = useState(false);
+  const [showPlanDowngrade, setShowPlanDowngrade] = useState(false);
   const [planChangeInfo, setPlanChangeInfo] = useState<{from: 'free' | 'gold' | 'diamond', to: 'free' | 'gold' | 'diamond'} | null>(null);
 
   useEffect(() => {
@@ -120,18 +121,29 @@ const PlansScreen = ({ navigation }: any) => {
           <View style={styles.cardsRow}>
             {plans.map(plan => {
               const isCurrent = user && userPlan === plan.key;
-              const handleChoose = () => {
-                if (!user) {
-                  navigation.navigate('Signup');
-                  return;
-                }
-                if (userPlan && userPlan !== plan.key) {
-                  setPlanChangeInfo({ from: userPlan as 'free' | 'gold' | 'diamond', to: plan.key as 'free' | 'gold' | 'diamond' });
-                  setShowPlanUpgrade(true);
-                  return;
-                }
-                // If already on this plan, do nothing
-              };
+  const handleChoose = () => {
+    if (!user) {
+      navigation.navigate('Signup');
+      return;
+    }
+    if (userPlan && userPlan !== plan.key) {
+      // If downgrading (diamond->gold, diamond->free, gold->free)
+      const isDowngrade =
+        (userPlan === 'diamond' && (plan.key === 'gold' || plan.key === 'free')) ||
+        (userPlan === 'gold' && plan.key === 'free');
+      setPlanChangeInfo({ from: userPlan as 'free' | 'gold' | 'diamond', to: plan.key as 'free' | 'gold' | 'diamond' });
+      if (isDowngrade) {
+        setShowPlanDowngrade(true);
+      } else {
+        setShowPlanUpgrade(true);
+      }
+      return;
+    }
+    // If already on this plan, do nothing
+  };
+              // Determine border color for button
+              const isLightBg = theme.background === '#fff' || theme.background === '#ffffff' || theme.background === 'white';
+              const buttonBorderColor = isLightBg ? '#000' : '#f3f4f6';
               return (
                 <View key={plan.key} style={[styles.card, { width: cardWidth, backgroundColor: theme.card, borderColor: theme.border }]}> 
                   {/* Card Header: Icon, Title, Price (top) */}
@@ -165,7 +177,7 @@ const PlansScreen = ({ navigation }: any) => {
                         isCurrent ? {
                           backgroundColor: theme.menu,
                           opacity: 0.7,
-                          borderColor: '#f3f4f6',
+                          borderColor: buttonBorderColor,
                           borderWidth: 2,
                         } : null,
                         { marginTop: 0, overflow: 'hidden', padding: 0 }
@@ -207,6 +219,31 @@ const PlansScreen = ({ navigation }: any) => {
             fromPlan={planChangeInfo?.from || 'free'}
             toPlan={planChangeInfo?.to || 'free'}
           />
+          {/* Downgrade warning modal */}
+          {showPlanDowngrade && planChangeInfo && (
+            <PlanUpgradeAlert
+              visible={showPlanDowngrade}
+              onClose={() => setShowPlanDowngrade(false)}
+              onConfirm={async () => {
+                setShowPlanDowngrade(false);
+                if (user && planChangeInfo) {
+                  // Update plan_type in Supabase
+                  const { error } = await supabase
+                    .from('profiles')
+                    .update({ plan_type: planChangeInfo.to })
+                    .eq('id', user.id);
+                  if (error) {
+                    alert('Failed to downgrade plan: ' + error.message);
+                  } else {
+                    setUserPlan(planChangeInfo.to);
+                  }
+                  setPlanChangeInfo(null);
+                }
+              }}
+              fromPlan={planChangeInfo.from}
+              toPlan={planChangeInfo.to}
+            />
+          )}
           {/* Bottom Call-to-Action Section */}
           <View style={styles.bottomCta}>
             <View style={{ flex: 1 }}>
@@ -229,7 +266,7 @@ const PlansScreen = ({ navigation }: any) => {
                 <Text style={[styles.trialBtnText, { color: theme.text }]}>Start Free Trial</Text>
               </TouchableOpacity>
               <Text style={[styles.trialText, { color: theme.textSecondary }]}>
-                7-day free diamond trial, then $19.99/month
+                7-day free diamond trial, then $9.99/month
               </Text>
             </View>
           </View>

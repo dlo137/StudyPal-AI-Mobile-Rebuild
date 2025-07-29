@@ -1,18 +1,56 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { Easing } from 'react-native';
 import type { FlatList as FlatListType } from 'react-native';
 import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, Animated, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import Header from '../components/Header';
 import { getAIResponse } from '../lib/openai';
 import Constants from 'expo-constants';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+
 
 type ChatMessage = {
   id: string;
   text: string;
   sender: string;
   image?: string;
+};
+
+// AnimatedDots component for AI "thinking..." indicator
+const AnimatedDots = ({ dotAnim }: { dotAnim: Animated.Value }) => {
+  const dotCount = 3;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: 24 }}>
+      {[...Array(dotCount)].map((_, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: 4,
+            backgroundColor: '#007aff',
+            marginHorizontal: 3,
+            opacity: dotAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [i === 0 ? 1 : 0.3, i === dotCount - 1 ? 1 : 0.3],
+            }),
+            transform: [
+              {
+                translateY: dotAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, i * 2],
+                }),
+              },
+            ],
+          }}
+        />
+      ))}
+    </View>
+  );
 };
 
 const DUMMY_MESSAGES: ChatMessage[] = [
@@ -36,13 +74,102 @@ const subjectColors = {
 };
 
 
+const PLAN_LIMITS = { free: 5, gold: 150, diamond: 500 };
+
 const ChatScreen = ({ route }: any) => {
+  // Animated dots for AI thinking
+  const [isThinking, setIsThinking] = useState(false);
+  const dotAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isThinking) {
+      Animated.loop(
+        Animated.timing(dotAnim, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      dotAnim.stopAnimation();
+      dotAnim.setValue(0);
+    }
+  }, [isThinking]);
   const { theme } = useTheme();
+  const { user } = useAuth();
   const userName = route?.params?.userName;
   const inputRef = useRef<TextInput>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(DUMMY_MESSAGES);
   const [uploading, setUploading] = useState(false);
   const [pendingPreview, setPendingPreview] = useState<{ uri: string; type?: string; fileName?: string } | null>(null);
+  const [planType, setPlanType] = useState<'free' | 'gold' | 'diamond' | null>(null);
+  const [questionsLeft, setQuestionsLeft] = useState<number | 'error' | null>(null);
+  // Fetch user plan and question usage
+  async function fetchPlanAndUsage() {
+    if (!user) {
+      setPlanType(null);
+      setQuestionsLeft(null);
+      return;
+    }
+    try {
+      // Get plan type
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('plan_type')
+        .eq('id', user.id)
+        .maybeSingle();
+      console.debug('[fetchPlanAndUsage] profileData:', profileData, 'profileError:', profileError);
+      if (profileError) {
+        console.log('❌ Error fetching user plan:', profileError.message);
+        setPlanType(null);
+        setQuestionsLeft(null);
+        return;
+      }
+      if (profileData && profileData.plan_type) {
+        const plan = String(profileData.plan_type).toLowerCase();
+        setPlanType(plan === 'gold' || plan === 'diamond' ? plan : 'free');
+        // Get current month in YYYY-MM format
+        const now = new Date();
+        const monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+        console.debug('[fetchPlanAndUsage] monthKey:', monthKey);
+        // Query monthly_usage for this user and month using date column
+        // Assumes date column is in YYYY-MM-DD format
+        const { data: usageData, error: usageError } = await supabase
+          .from('monthly_usage')
+          .select('questions_asked')
+          .eq('user_id', user.id)
+          .gte('date', `${monthKey}-01`)
+          .lte('date', `${monthKey}-31`);
+        console.debug('[fetchPlanAndUsage] usageData:', usageData, 'usageError:', usageError);
+        if (usageError) {
+          console.log('❌ Error fetching monthly usage:', usageError.message);
+          setQuestionsLeft('error');
+        } else {
+          // Sum all rows for the month
+          let used = 0;
+          if (usageData && Array.isArray(usageData)) {
+            used = usageData.reduce((acc, row) => acc + (row.questions_asked || 0), 0);
+          }
+          const limit = PLAN_LIMITS[plan === 'gold' || plan === 'diamond' ? plan : 'free'];
+          console.debug('[fetchPlanAndUsage] used:', used, 'limit:', limit, 'questionsLeft:', limit - used >= 0 ? limit - used : 0);
+          // Always show 0 if at or above limit
+          setQuestionsLeft(limit - used >= 0 ? limit - used : 0);
+        }
+      } else {
+        console.log('❌ No plan_type found for user:', user.id);
+        setPlanType(null);
+        setQuestionsLeft(null);
+      }
+    } catch (err) {
+      console.log('❌ Exception fetching user plan:', err);
+      setPlanType(null);
+      setQuestionsLeft(null);
+    }
+  }
+
+  useEffect(() => {
+    fetchPlanAndUsage();
+  }, [user, messages]);
   // FlatList ref for auto-scrolling
   const flatListRef = useRef<FlatListType<any>>(null);
   // Send file/image if preview is present
@@ -52,16 +179,27 @@ const ChatScreen = ({ route }: any) => {
     // Show preview in chat
     const fileMsg = {
       id: Date.now().toString(),
-      text: pendingPreview.fileName || pendingPreview.uri.split('/').pop() || 'Uploaded file',
+      text: '', // Hide image filename from chat bubble
       sender: 'user',
       image: pendingPreview.uri,
     };
-    setMessages(prev => [...prev, fileMsg]);
+    // If this is the first message, clear dummy messages and start chat
+    setMessages(prev => {
+      if (
+        prev.length === DUMMY_MESSAGES.length &&
+        prev.every((m, i) => m.id === DUMMY_MESSAGES[i].id)
+      ) {
+        setHasStarted(true);
+        return [fileMsg];
+      }
+      return [...prev, fileMsg];
+    });
+    // Always start chat if not started
+    if (!hasStarted) setHasStarted(true);
+    // Clear image preview immediately after sending
+    setPendingPreview(null);
     // Send to AI for analysis (send a message describing the file)
-    let fileDesc = 'I have uploaded a file. Please analyze, describe, or solve the content of this file. If it is an image, describe what you see and solve any problems or questions shown in the image.';
-    if (pendingPreview.type?.startsWith('image')) {
-      fileDesc = 'I have uploaded an image. Please describe the image in detail, analyze its content, and solve or answer any problems or questions shown in the image.';
-    }
+    let fileDesc = 'Please analyze this image and solve the problem if presented with one.';
     // Prepare chat history
     let chatHistory = [
       ...messages.filter(m => m.sender === 'user' || m.sender === 'ai').map(m => ({
@@ -70,6 +208,13 @@ const ChatScreen = ({ route }: any) => {
       })),
       { role: 'user', content: fileDesc },
     ];
+    // If this is the first message, don't include dummy messages
+    if (
+      messages.length === DUMMY_MESSAGES.length &&
+      messages.every((m, i) => m.id === DUMMY_MESSAGES[i].id)
+    ) {
+      chatHistory = [{ role: 'user', content: fileDesc }];
+    }
     if (selectedSubject) {
       chatHistory = [
         {
@@ -79,18 +224,17 @@ const ChatScreen = ({ route }: any) => {
         ...chatHistory
       ];
     }
+    // Show animated thinking indicator
+    setIsThinking(true);
     try {
       const aiText = await getAIResponse(chatHistory);
-      const aiMsg = { id: (Date.now() + 1).toString(), text: aiText, sender: 'ai' };
-      setMessages(prev => [...prev, aiMsg]);
+      setIsThinking(false);
+      setMessages(prev => [...prev, { id: (Date.now() + 2).toString(), text: aiText, sender: 'ai' }]);
     } catch (err) {
-      setMessages(prev => [
-        ...prev,
-        { id: (Date.now() + 2).toString(), text: 'Sorry, there was an error analyzing the file.', sender: 'ai' }
-      ]);
+      setIsThinking(false);
+      setMessages(prev => [...prev, { id: (Date.now() + 3).toString(), text: 'Sorry, there was an error analyzing the file.', sender: 'ai' }]);
     }
     setUploading(false);
-    setPendingPreview(null);
   }
 
   // Handle file/image upload
@@ -174,6 +318,9 @@ const ChatScreen = ({ route }: any) => {
     setInput('');
     setHasStarted(false);
     setSelectedSubject(null);
+    setPendingPreview(null); // Clear image/file preview
+    // Always re-fetch plan and usage after chat reset
+    fetchPlanAndUsage();
     // Reset subject button animations so they are visible and animate in
     subjectAnimRefs.forEach(anim => anim.setValue(0));
     setTimeout(() => {
@@ -236,61 +383,239 @@ const ChatScreen = ({ route }: any) => {
   const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
+
+    // Always fetch latest plan and usage before sending
+    let latestPlanType = planType;
+    let latestQuestionsLeft = questionsLeft;
+    let latestQuestionsUsed = 0;
+    if (user) {
+      try {
+        // Get plan_type from profiles
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('plan_type')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profileError) {
+          console.log('❌ Error fetching plan_type:', profileError);
+          alert('Error checking your plan. Please try again.');
+          return;
+        }
+        if (profileData && profileData.plan_type) {
+          latestPlanType = String(profileData.plan_type).toLowerCase() as 'free' | 'gold' | 'diamond' | null;
+          if (latestPlanType === 'gold' || latestPlanType === 'diamond') {
+            // Only query daily_usage for gold/diamond
+            const { data: usageData, error: usageError } = await supabase
+              .from('daily_usage')
+              .select('questions_asked')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            if (usageError) {
+              console.log('❌ Error fetching usage:', usageError);
+              alert('Error checking your usage. Please try again.');
+              return;
+            }
+            const limit = PLAN_LIMITS[latestPlanType];
+            // If no row exists, treat as zero used
+            latestQuestionsUsed = (usageData && typeof usageData.questions_asked === 'number') ? usageData.questions_asked : 0;
+            latestQuestionsLeft = limit - latestQuestionsUsed;
+          } else if (latestPlanType === 'free') {
+            // For free plan, track monthly usage in AsyncStorage
+            const now = new Date();
+            const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+            let freeUsage = { month: monthKey, count: 0 };
+            try {
+              const stored = await AsyncStorage.getItem('free_plan_usage');
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.month === monthKey) {
+                  freeUsage = parsed;
+                } else {
+                  // New month, reset count
+                  freeUsage = { month: monthKey, count: 0 };
+                }
+              }
+            } catch (storageErr) {
+              console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
+            }
+            latestQuestionsUsed = freeUsage.count;
+            latestQuestionsLeft = PLAN_LIMITS.free - latestQuestionsUsed;
+          } else {
+            latestQuestionsLeft = null;
+          }
+        } else {
+          // No profile row: treat as free plan
+          latestPlanType = 'free';
+          // Use AsyncStorage for monthly tracking
+          const now = new Date();
+          const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+          let freeUsage = { month: monthKey, count: 0 };
+          try {
+            const stored = await AsyncStorage.getItem('free_plan_usage');
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed.month === monthKey) {
+                freeUsage = parsed;
+              }
+            }
+          } catch (storageErr) {
+            console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
+          }
+          latestQuestionsUsed = freeUsage.count;
+          latestQuestionsLeft = PLAN_LIMITS.free - latestQuestionsUsed;
+        }
+      } catch (err) {
+        console.log('❌ Exception in plan/usage check:', err);
+        alert('Error checking your plan. Please try again.');
+        return;
+      }
+    }
+
+    // Enforce limits: allow sending, but always append warning if at limit
+    let limitWarning: string | null = null;
+    if (
+      latestPlanType === 'free' &&
+      typeof latestQuestionsLeft === 'number' &&
+      latestQuestionsLeft <= 0
+    ) {
+      limitWarning = '⚠️ You have reached the free plan limit of 5 questions for this month. Upgrade to Gold (150 questions) or Diamond (500 questions) for more monthly questions!';
+    } else if (
+      latestPlanType === 'gold' &&
+      typeof latestQuestionsLeft === 'number' &&
+      latestQuestionsLeft <= 0
+    ) {
+      limitWarning = '⚠️ You have reached your Gold plan limit of 150 questions. Upgrade to Diamond (500 questions) for more daily questions!';
+    } else if (
+      latestPlanType === 'diamond' &&
+      typeof latestQuestionsLeft === 'number' &&
+      latestQuestionsLeft <= 0
+    ) {
+      limitWarning = '⚠️ You have reached your Diamond plan limit of 500 questions. Your limit will reset tomorrow.';
+    }
+
     clearDummyIfNeeded();
     const userMsg = { id: Date.now().toString(), text: trimmed, sender: 'user' };
     setMessages(prev => {
+      let newMsgs;
       if (
         prev.length === DUMMY_MESSAGES.length &&
         prev.every((m, i) => m.id === DUMMY_MESSAGES[i].id)
       ) {
-        return [userMsg];
+        newMsgs = [userMsg];
+      } else {
+        newMsgs = [...prev, userMsg];
       }
-      return [...prev, userMsg];
+      if (limitWarning) {
+        newMsgs = [
+          ...newMsgs,
+          {
+            id: (Date.now() + 3).toString(),
+            text: limitWarning,
+            sender: 'ai'
+          }
+        ];
+      }
+      return newMsgs;
     });
     setInput('');
     setHasStarted(true);
 
-    try {
-      // Prepare chat history for OpenAI
-      let chatHistory = [
-        ...messages.filter(m => m.sender === 'user' || m.sender === 'ai').map(m => ({
-          role: m.sender === 'user' ? 'user' : 'assistant',
-          content: m.text,
-        })),
-        { role: 'user', content: trimmed }
-      ];
-      // If a subject is selected, prepend a system prompt
-      if (selectedSubject) {
-        chatHistory = [
-          {
-            role: 'system',
-            content: `You are a friendly, knowledgeable AI tutor who is an expert in ${selectedSubject}. Your job is to help students understand and solve their homework problems in this subject.\n\nBe accurate, up-to-date, and clear.\n\nStart by explaining key concepts or steps briefly before solving the problem.\n\nKeep answers compact but not shallow — Give the answer, but teach afterwards as well\n\nSpeak like a smart, encouraging tutor or helpful study buddy.\n\nIf there’s a mistake in the student’s question or reasoning, kindly correct it and guide them to the right thinking.\n\nAvoid fluff. Get to the point, explain clearly, and help them learn fast.`
-          },
-          ...chatHistory
+    // For free plan, update questionsLeft immediately (but don't increment if at limit)
+    if (latestPlanType === 'free' && (!limitWarning)) {
+      // Update monthly usage in AsyncStorage
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+      let freeUsage = { month: monthKey, count: 0 };
+      try {
+        const stored = await AsyncStorage.getItem('free_plan_usage');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.month === monthKey) {
+            freeUsage = parsed;
+          }
+        }
+      } catch (storageErr) {
+        console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
+      }
+      freeUsage.count += 1;
+      try {
+        await AsyncStorage.setItem('free_plan_usage', JSON.stringify(freeUsage));
+      } catch (storageErr) {
+        console.log('❌ Error writing AsyncStorage for free plan usage:', storageErr);
+      }
+      setQuestionsLeft(PLAN_LIMITS.free - freeUsage.count);
+    } else if ((latestPlanType === 'gold' || latestPlanType === 'diamond') && (!limitWarning)) {
+      setQuestionsLeft(
+        typeof latestQuestionsLeft === 'number' ? latestQuestionsLeft - 1 : latestQuestionsLeft
+      );
+    }
+    setPlanType(latestPlanType);
+
+    // Only call AI if not at limit
+    if (!limitWarning) {
+      try {
+        // Prepare chat history for OpenAI
+        let chatHistory = [
+          ...messages.filter(m => m.sender === 'user' || m.sender === 'ai').map(m => ({
+            role: m.sender === 'user' ? 'user' : 'assistant',
+            content: m.text,
+          })),
+          { role: 'user', content: trimmed }
         ];
+        // If a subject is selected, prepend a system prompt
+        if (selectedSubject) {
+          chatHistory = [
+            {
+              role: 'system',
+              content: `You are a friendly, knowledgeable AI tutor who is an expert in ${selectedSubject}. Your job is to help students understand and solve their homework problems in this subject.\n\nBe accurate, up-to-date, and clear.\n\nStart by explaining key concepts or steps briefly before solving the problem.\n\nKeep answers compact but not shallow — Give the answer, but teach afterwards as well\n\nSpeak like a smart, encouraging tutor or helpful study buddy.\n\nIf there’s a mistake in the student’s question or reasoning, kindly correct it and guide them to the right thinking.\n\nAvoid fluff. Get to the point, explain clearly, and help them learn fast.`
+            },
+            ...chatHistory
+          ];
+        }
+        // Show animated thinking indicator
+        setIsThinking(true);
+        const aiText = await getAIResponse(chatHistory);
+        setIsThinking(false);
+        setMessages(prev => [...prev, { id: (Date.now() + 2).toString(), text: aiText, sender: 'ai' }]);
+      } catch (err) {
+        setIsThinking(false);
+        setMessages(prev => [...prev, { id: (Date.now() + 3).toString(), text: 'Sorry, there was an error getting a response.', sender: 'ai' }]);
       }
-      console.log('[DEBUG] OpenAI API Key:', Constants?.expoConfig?.extra?.OPENAI_API_KEY);
-      console.log('[DEBUG] Sending chatHistory to OpenAI:', chatHistory);
-      const aiText = await getAIResponse(chatHistory);
-      console.log('[DEBUG] OpenAI response:', aiText);
-      const aiMsg = { id: (Date.now() + 1).toString(), text: aiText, sender: 'ai' };
-      setMessages(prev => [...prev, aiMsg]);
-    } catch (err) {
-      if (err instanceof Error) {
-        console.log('[ERROR] OpenAI API error:', err.message, err.stack);
-      } else {
-        console.log('[ERROR] OpenAI API error:', err);
-      }
-      setMessages(prev => [
-        ...prev,
-        { id: (Date.now() + 2).toString(), text: 'Sorry, there was an error getting a response.', sender: 'ai' }
-      ]);
     }
   };
 
+  // Header with questions left
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}> 
-      <Header hidePlus={false} hideBranding={false} onSignInPress={startNewChat} />
+      <Header
+        hidePlus={false}
+        hideBranding={false}
+        onSignInPress={startNewChat}
+        rightContent={
+          planType === 'free' && questionsLeft !== null ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+              <Ionicons name="help-circle" size={18} color={theme.accent} style={{ marginRight: 4 }} />
+              <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 13 }}>
+                {questionsLeft === 'error' ? 'Error' : `${questionsLeft}/5 left`}
+              </Text>
+            </View>
+          ) : planType === 'gold' && questionsLeft !== null ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+              <Ionicons name="help-circle" size={18} color={theme.accent} style={{ marginRight: 4 }} />
+              <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 13 }}>
+                {questionsLeft === 'error' ? 'Error' : `${questionsLeft}/150 left`}
+              </Text>
+            </View>
+          ) : planType === 'diamond' && questionsLeft !== null ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 8 }}>
+              <Ionicons name="help-circle" size={18} color={theme.accent} style={{ marginRight: 4 }} />
+              <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 13 }}>
+                {questionsLeft === 'error' ? 'Error' : `${questionsLeft}/500 left`}
+              </Text>
+            </View>
+          ) : null
+        }
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -312,23 +637,34 @@ const ChatScreen = ({ route }: any) => {
               keyExtractor={item => item.id}
               style={{ flex: 1, paddingHorizontal: 16, paddingTop: 14 }}
               contentContainerStyle={{ paddingBottom: 80 }}
-              renderItem={({ item }) => (
-                <View style={{ alignSelf: item.sender === 'user' ? 'flex-end' : 'flex-start', marginVertical: 8, maxWidth: '80%' }}>
-                  {item.image ? (
-                    <Image source={{ uri: item.image }} style={{ width: 180, height: 180, borderRadius: 16, marginBottom: 4 }} resizeMode="cover" />
-                  ) : null}
-                  <Text
-                    style={{
-                      color: '#fff',
-                      backgroundColor: item.sender === 'user' ? '#23232a' : '#007aff',
-                      borderRadius: 22,
-                      paddingVertical: 8,
-                      paddingHorizontal: 14,
-                    }}
-                  >
-                    {item.text}
-                  </Text>
-                </View>
+              renderItem={({ item, index }) => (
+                <>
+                  <View style={{ alignSelf: item.sender === 'user' ? 'flex-end' : 'flex-start', marginVertical: 8, maxWidth: '80%' }}>
+                    {item.image ? (
+                      <Image source={{ uri: item.image }} style={{ width: 180, height: 180, borderRadius: 16, marginBottom: 4 }} resizeMode="cover" />
+                    ) : null}
+                    {/* Only render chat bubble if text is not empty */}
+                    {item.text ? (
+                      <Text
+                        style={{
+                          color: '#fff',
+                          backgroundColor: item.sender === 'user' ? '#23232a' : '#007aff',
+                          borderRadius: 22,
+                          paddingVertical: 8,
+                          paddingHorizontal: 14,
+                        }}
+                      >
+                        {item.text}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {/* Show animated thinking dots below last user message if AI is thinking */}
+                  {isThinking && index === messages.length - 1 && item.sender === 'user' && (
+                    <View style={{ alignSelf: 'flex-start', marginLeft: 8, marginTop: 2, marginBottom: 8 }}>
+                      <AnimatedDots dotAnim={dotAnim} />
+                    </View>
+                  )}
+                </>
               )}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={true}

@@ -15,9 +15,10 @@ interface HeaderProps {
   onSignInPress?: () => void;
   hideBranding?: boolean;
   hidePlus?: boolean;
+  rightContent?: React.ReactNode;
 }
 
-const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignInPress, hideBranding, hidePlus }) => {
+const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignInPress, hideBranding, hidePlus, rightContent }) => {
   const navigation = useNavigation();
   const { isLoggedIn, user, signOut } = useAuth();
   const { theme } = useTheme();
@@ -52,6 +53,22 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
         )}
       </View>
       <View style={styles.rightIcons}>
+        {/* Insert rightContent (question counter) to the left of the upgrade button */}
+        {rightContent && (
+          <View style={[styles.counterBubble, { marginRight: 8 }]}> 
+            {/* Only render the counter text, not the icon */}
+            {typeof rightContent === 'string' || typeof rightContent === 'number'
+              ? <Text style={{ textAlign: 'center', color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{rightContent}</Text>
+              : (React.isValidElement(rightContent) && rightContent.type === View
+                  ? React.Children.map(rightContent.props.children, child => {
+                      if (React.isValidElement(child) && child.type === Ionicons) {
+                        return null;
+                      }
+                      return child;
+                    })
+                  : rightContent)}
+          </View>
+        )}
         <TouchableOpacity
           style={[styles.upgradeBtn, { backgroundColor: theme.card, borderColor: theme.accent }]}
           onPress={() => {
@@ -110,6 +127,17 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
 };
 
 const styles = StyleSheet.create({
+  counterBubble: {
+    textAlign: 'center',
+    backgroundColor: '#23232a',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Bubble width fits content, text is centered
+  },
+  
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
