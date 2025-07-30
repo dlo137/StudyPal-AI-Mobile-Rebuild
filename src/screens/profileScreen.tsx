@@ -67,6 +67,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
       }
     };
     fetchPlan();
+    // Listen for global.fetchPlanAndUsage calls to refresh plan instantly after upgrade/downgrade
+    global.fetchPlanAndUsage = async () => {
+      await fetchPlan();
+    };
+    return () => {
+      if (global.fetchPlanAndUsage) {
+        global.fetchPlanAndUsage = undefined;
+      }
+    };
   }, [user]);
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}> 

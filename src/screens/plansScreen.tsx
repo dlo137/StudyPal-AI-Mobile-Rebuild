@@ -64,6 +64,7 @@ const PlansScreen = ({ navigation }: any) => {
   const [showPlanDowngrade, setShowPlanDowngrade] = useState(false);
   const [planChangeInfo, setPlanChangeInfo] = useState<{from: 'free' | 'gold' | 'diamond', to: 'free' | 'gold' | 'diamond'} | null>(null);
 
+  // Refetch user plan after navigation or global plan change
   useEffect(() => {
     async function fetchUserPlan() {
       if (!user) {
@@ -101,7 +102,21 @@ const PlansScreen = ({ navigation }: any) => {
       }
     }
     fetchUserPlan();
-  }, [user]);
+    // Listen for global.fetchPlanAndUsage calls
+    global.fetchPlanAndUsage = async () => {
+      await fetchUserPlan();
+    };
+    // Refetch when coming back from StripePaymentScreen
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchUserPlan();
+    });
+    return () => {
+      if (global.fetchPlanAndUsage) {
+        global.fetchPlanAndUsage = undefined;
+      }
+      unsubscribe && unsubscribe();
+    };
+  }, [user, navigation]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}> 
@@ -174,20 +189,14 @@ const PlansScreen = ({ navigation }: any) => {
                     <TouchableOpacity
                       style={[
                         styles.cardBtn,
-                        isCurrent ? {
-                          backgroundColor: theme.menu,
-                          opacity: 0.7,
-                          borderColor: buttonBorderColor,
-                          borderWidth: 2,
-                        } : null,
-                        { marginTop: 0, overflow: 'hidden', padding: 0 }
+                        isCurrent ? styles.cardBtnCurrent : styles.cardBtnChoose
                       ]}
                       activeOpacity={isCurrent ? 1 : 0.85}
                       disabled={isCurrent}
                       onPress={handleChoose}
                     >
                       {isCurrent ? (
-                        <Text style={[styles.cardBtnTextCurrent, { zIndex: 1, color: theme.textSecondary }]}>Current Plan</Text>
+                        <Text style={styles.cardBtnTextCurrent}>Current Plan</Text>
                       ) : (
                         <>
                           <LinearGradient
@@ -197,7 +206,7 @@ const PlansScreen = ({ navigation }: any) => {
                             style={StyleSheet.absoluteFill}
                             pointerEvents="none"
                           />
-                          <Text style={[styles.cardBtnText, { zIndex: 1, color: theme.text }]}>Choose {plan.title.split(' ')[0]}</Text>
+                          <Text style={styles.cardBtnText}>Choose {plan.title.split(' ')[0]}</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -236,6 +245,10 @@ const PlansScreen = ({ navigation }: any) => {
                     alert('Failed to downgrade plan: ' + error.message);
                   } else {
                     setUserPlan(planChangeInfo.to);
+                    // Refetch plan from Supabase to ensure UI updates
+                    if (typeof global.fetchPlanAndUsage === 'function') {
+                      await global.fetchPlanAndUsage();
+                    }
                   }
                   setPlanChangeInfo(null);
                 }

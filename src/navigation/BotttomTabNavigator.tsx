@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 import ChatScreen from '../screens/chatScreen';
-import ScannerScreen from '../screens/scannerScreen';
+import NotesScreen from '../screens/notesScreen';
 import PlansScreen from '../screens/plansScreen';
 import ProfileScreen from '../screens/profileScreen';
 
@@ -23,8 +23,8 @@ const BottomTabNavigator = () => {
           let iconName = '';
           if (route.name === 'Chat') {
             iconName = focused ? 'chatbubble' : 'chatbubble-outline';
-          } else if (route.name === 'Scanner') {
-            iconName = focused ? 'scan' : 'scan-outline';
+          } else if (route.name === 'Notes') {
+            iconName = focused ? 'document' : 'document-outline';
           } else if (route.name === 'Plans') {
             iconName = focused ? 'star' : 'star-outline';
           } else if (route.name === 'Profile') {
@@ -35,7 +35,7 @@ const BottomTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Chat" component={ChatScreen} options={{ headerShown: false, tabBarLabel: 'Chat' }} />
-      <Tab.Screen name="Scanner" component={ScannerScreen} options={{ tabBarLabel: 'Scanner' }} />
+      <Tab.Screen name="Notes" component={NotesScreen} options={{ tabBarLabel: 'Notes', headerShown: false }} />
       <Tab.Screen name="Plans" component={PlansScreen} options={{ tabBarLabel: 'Plans' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>

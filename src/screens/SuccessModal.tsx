@@ -1,13 +1,17 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
+
 interface SuccessModalProps {
   visible: boolean;
   onClose: () => void;
   userName?: string;
+  title?: string;
+  message?: string;
+  showButton?: boolean;
 }
 
-export default function SuccessModal({ visible, onClose, userName }: SuccessModalProps) {
+const SuccessModal = ({ visible, onClose, userName, title, message, showButton }: SuccessModalProps) => {
   return (
     <Modal
       visible={visible}
@@ -17,18 +21,22 @@ export default function SuccessModal({ visible, onClose, userName }: SuccessModa
     >
       <View style={styles.overlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.title}>Success!</Text>
+          <Text style={styles.title}>{title || 'Success!'}</Text>
           <Text style={styles.message}>
-            {`You've successfully signed in${userName ? `, ${userName}` : ''}!`}
+            {message || `You've successfully signed in${userName ? `, ${userName}` : ''}!`}
           </Text>
-          <TouchableOpacity style={styles.button} onPress={onClose}>
-            <Text style={styles.buttonText}>OK</Text>
-          </TouchableOpacity>
+          {(showButton !== false) && (
+            <TouchableOpacity style={styles.button} onPress={onClose}>
+              <Text style={styles.buttonText}>OK</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
   );
-}
+};
+
+export default SuccessModal;
 
 const styles = StyleSheet.create({
   overlay: {

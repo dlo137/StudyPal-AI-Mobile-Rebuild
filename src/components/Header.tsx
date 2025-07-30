@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LoggedOutModal from '../screens/LoggedOutModal';
 import { useNavigation } from '@react-navigation/native';
 import { Alert } from 'react-native';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
@@ -23,6 +24,7 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
   const { isLoggedIn, user, signOut } = useAuth();
   const { theme } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
+  const [showLoggedOutModal, setShowLoggedOutModal] = useState(false);
 
   // Get first initial for logged in user
   let firstInitial = null;
@@ -53,20 +55,13 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
         )}
       </View>
       <View style={styles.rightIcons}>
-        {/* Insert rightContent (question counter) to the left of the upgrade button */}
-        {rightContent && (
-          <View style={[styles.counterBubble, { marginRight: 8 }]}> 
-            {/* Only render the counter text, not the icon */}
+        {/* Always render the counter bubble with the latest rightContent */}
+        {rightContent !== undefined && rightContent !== null && (
+          <View style={styles.counterBubble}> 
+            {/* Only render the counter text, never the icon */}
             {typeof rightContent === 'string' || typeof rightContent === 'number'
-              ? <Text style={{ textAlign: 'center', color: '#fff', fontWeight: 'bold', fontSize: 13 }}>{rightContent}</Text>
-              : (React.isValidElement(rightContent) && rightContent.type === View
-                  ? React.Children.map(rightContent.props.children, child => {
-                      if (React.isValidElement(child) && child.type === Ionicons) {
-                        return null;
-                      }
-                      return child;
-                    })
-                  : rightContent)}
+              ? <Text style={{ textAlign: 'center', color: '#fff', fontWeight: 'bold', fontSize: 13, marginLeft: 6 }}>{rightContent}</Text>
+              : rightContent}
           </View>
         )}
         <TouchableOpacity
@@ -92,7 +87,12 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
           {menuVisible && (
             <View style={[styles.dropdownMenu, { backgroundColor: theme.background, borderColor: theme.border }]}> 
               {isLoggedIn ? (
-                <TouchableOpacity style={styles.menuItem} onPress={async () => { setMenuVisible(false); await signOut(); }}>
+                <TouchableOpacity style={styles.menuItem} onPress={async () => {
+                  setMenuVisible(false);
+                  await signOut();
+                  setShowLoggedOutModal(true);
+                  setTimeout(() => setShowLoggedOutModal(false), 1800);
+                }}>
                   <Text style={[styles.menuItemText, { color: '#f43f5e' }]}>Sign Out</Text>
                 </TouchableOpacity>
               ) : (
@@ -120,6 +120,11 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
               )}
             </View>
           )}
+          {/* Logged out modal (styled like login success) */}
+          <LoggedOutModal
+            visible={showLoggedOutModal}
+            onClose={() => setShowLoggedOutModal(false)}
+          />
         </View>
       </View>
     </View>
@@ -128,13 +133,15 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
 
 const styles = StyleSheet.create({
   counterBubble: {
-    textAlign: 'center',
     backgroundColor: '#23232a',
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 36,
+    marginRight: 8,
+    alignSelf: 'center',
     // Bubble width fits content, text is centered
   },
   
@@ -181,15 +188,15 @@ const styles = StyleSheet.create({
   },
   upgradeBtn: {
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 8, // reduced from 12
+    paddingVertical: 2,   // reduced from 4
     marginRight: 6,
     borderWidth: 2,
     // backgroundColor and borderColor set via theme
   },
   upgradeText: {
     fontWeight: 'bold',
-    fontSize: 15,
+    fontSize: 13, // reduced from 15
     // color set via theme
   },
   profileCircle: {
