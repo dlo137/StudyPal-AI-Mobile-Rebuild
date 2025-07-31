@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
   if (planType === 'gold') {
     amount = 499; // $4.99 in cents
   } else if (planType === 'diamond') {
-    amount = 50; // $0.50 in cents (Stripe minimum)
+    amount = 499; // $4.99 in cents
   } else {
     return res.status(400).json({ error: 'Invalid planType.' });
   }

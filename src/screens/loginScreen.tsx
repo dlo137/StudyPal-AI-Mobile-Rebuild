@@ -186,12 +186,7 @@ const LoginScreen = ({ navigation }: any) => {
             editable={!loading}
           />
 
-          {/* Forgot Password link (now right after password input) */}
-          <View style={{ width: '100%', alignItems: 'flex-end', marginBottom: 16 }}>
-            <TouchableOpacity onPress={() => navigation?.navigate && navigation.navigate('ForgotPassword') }>
-              <Text style={{ color: '#4285F4', fontWeight: 'bold', fontSize: 15 }}>Forgot password?</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Forgot Password link temporarily removed */}
 
           <TouchableOpacity
             style={styles.loginBtn}
