@@ -12,24 +12,30 @@
       let type = params.get('type');
 
       // If not found, parse hash fragment
-      if (!token || !type) {
-        if (window.location.hash) {
-          // Remove leading #
-          let hash = window.location.hash.substring(1);
-          // If hash starts with '/', remove it
-          if (hash.startsWith('/')) hash = hash.substring(1);
-          // If hash contains '?', parse after '?'
-          let hashParamsStr = hash.includes('?') ? hash.split('?')[1] : hash;
-          let hashParams = new URLSearchParams(hashParamsStr);
-          token = token || hashParams.get('access_token') || hashParams.get('token');
-          type = type || hashParams.get('type');
-        }
+      let hashParams = new URLSearchParams();
+      if (window.location.hash) {
+        let hash = window.location.hash.substring(1);
+        if (hash.startsWith('/')) hash = hash.substring(1);
+        let hashParamsStr = hash.includes('?') ? hash.split('?')[1] : hash;
+        hashParams = new URLSearchParams(hashParamsStr);
+        token = token || hashParams.get('access_token') || hashParams.get('token');
+        type = type || hashParams.get('type');
       }
 
       const debugPanel = document.getElementById('debug');
       debugPanel.innerHTML = `<strong>Params:</strong><br>token: ${token}<br>type: ${type}<br><br><strong>Location:</strong><br>search: ${window.location.search}<br>hash: ${window.location.hash}`;
       console.log('handle-reset.html loaded');
       console.log('Params:', { token, type });
+
+      // Error handling from Supabase hash
+      const errorCode = hashParams.get('error_code');
+      const errorDescription = hashParams.get('error_description');
+      if (errorCode && errorDescription) {
+        document.getElementById('status').textContent = decodeURIComponent(errorDescription);
+        console.log('Supabase error:', errorCode, errorDescription);
+        return;
+      }
+
       if (token && type === 'recovery') {
         const redirectUrl = `studypal://reset-password?token=${token}&type=${type}`;
         console.log('Redirecting to:', redirectUrl);

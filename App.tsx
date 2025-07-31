@@ -5,7 +5,7 @@ import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 // Deep linking config for the app
 const linking = {
-  prefixes: ['studypal://', 'https://stud-pal-ai-mobile-rebuild-xktk.vercel.app'],
+  prefixes: ['studypal://'],
   config: {
     screens: {
       Login: 'login',

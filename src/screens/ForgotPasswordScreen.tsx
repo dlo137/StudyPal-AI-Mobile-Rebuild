@@ -72,21 +72,16 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const handleSendReset = async () => {
+  const handleSendMagicLink = async () => {
     setLoading(true);
     setMessage('');
     setError('');
-    const redirectUrl = 'studypal://reset-password';
-    // Debug: confirm the redirect URL used for Supabase password reset
-    console.log('[ForgotPassword] Sending reset email with redirectTo:', redirectUrl);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectUrl,
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email });
     setLoading(false);
     if (error) {
-      setError(error.message || 'Failed to send reset email.');
+      setError(error.message || 'Failed to send magic link.');
     } else {
-      setMessage('A password reset link has been sent to your email.');
+      setMessage('A magic login link has been sent to your email.');
     }
   };
 
@@ -94,7 +89,10 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.centeredContent}>
-          <Text style={styles.title}>Forgot Password</Text>
+          <Text style={styles.title}>Trouble Logging In?</Text>
+          <Text style={{ color: '#a0a0a0', fontSize: 15, marginBottom: 10, textAlign: 'center' }}>
+            Enter your email and we’ll send you a magic login link.
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="Enter your email"
@@ -107,8 +105,8 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {message ? <Text style={styles.message}>{message}</Text> : null}
-          <TouchableOpacity style={styles.button} onPress={handleSendReset} disabled={loading || !email}>
-            <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
+          <TouchableOpacity style={styles.button} onPress={handleSendMagicLink} disabled={loading || !email}>
+            <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send Magic Link'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, { backgroundColor: '#23232a', marginTop: 16 }]} onPress={() => navigation?.goBack && navigation.goBack()}>
             <Text style={[styles.buttonText, { color: '#fff' }]}>Back to Login</Text>
