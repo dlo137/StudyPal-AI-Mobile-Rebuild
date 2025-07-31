@@ -10,6 +10,7 @@ import ProfileScreen from '../screens/profileScreen';
 
 const Tab = createBottomTabNavigator();
 
+
 const BottomTabNavigator = () => {
   const { theme } = useTheme();
   return (

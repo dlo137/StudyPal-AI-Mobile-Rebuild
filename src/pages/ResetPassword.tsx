@@ -1,6 +1,3 @@
-// For web password reset, make sure your web app has a route at /reset-password
-// using your ResetPassword.tsx component. Example (React Router):
-// <Route path="/reset-password" element={<ResetPassword />} />
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
@@ -66,27 +63,33 @@ const styles = StyleSheet.create({
   },
 });
 
-const ForgotPasswordScreen = ({ navigation }: any) => {
-  const [email, setEmail] = useState('');
+const ResetPassword = ({ navigation }: any) => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const handleSendReset = async () => {
+  const handleResetPassword = async () => {
     setLoading(true);
     setMessage('');
     setError('');
-    const redirectUrl = 'studypal://reset-password';
-    // Debug: confirm the redirect URL used for Supabase password reset
-    console.log('[ForgotPassword] Sending reset email with redirectTo:', redirectUrl);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectUrl,
-    });
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      setLoading(false);
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
     if (error) {
-      setError(error.message || 'Failed to send reset email.');
+      setError(error.message || 'Failed to reset password.');
     } else {
-      setMessage('A password reset link has been sent to your email.');
+      setMessage('Your password has been updated. You can now log in.');
     }
   };
 
@@ -94,21 +97,29 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.centeredContent}>
-          <Text style={styles.title}>Forgot Password</Text>
+          <Text style={styles.title}>Reset Password</Text>
           <TextInput
             style={styles.input}
-            placeholder="Enter your email"
+            placeholder="New password"
             placeholderTextColor="#a0a0a0"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
+            secureTextEntry
+            value={newPassword}
+            onChangeText={setNewPassword}
+            editable={!loading}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm new password"
+            placeholderTextColor="#a0a0a0"
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
             editable={!loading}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           {message ? <Text style={styles.message}>{message}</Text> : null}
-          <TouchableOpacity style={styles.button} onPress={handleSendReset} disabled={loading || !email}>
-            <Text style={styles.buttonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
+          <TouchableOpacity style={styles.button} onPress={handleResetPassword} disabled={loading || !newPassword || !confirmPassword}>
+            <Text style={styles.buttonText}>{loading ? 'Updating...' : 'Update Password'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.button, { backgroundColor: '#23232a', marginTop: 16 }]} onPress={() => navigation?.goBack && navigation.goBack()}>
             <Text style={[styles.buttonText, { color: '#fff' }]}>Back to Login</Text>
@@ -119,4 +130,4 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
   );
 };
 
-export default ForgotPasswordScreen;
+export default ResetPassword;

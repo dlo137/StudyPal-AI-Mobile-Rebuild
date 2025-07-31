@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Handle Password Reset Redirect</title>
+  <script>
+    window.onload = function() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const type = params.get('type');
+      if (token && type === 'recovery') {
+        // Redirect to your app's deep link with token and type
+        window.location.href = `studypal://reset-password?token=${token}&type=${type}`;
+      } else {
+        document.getElementById('status').textContent = 'Invalid password reset link.';
+      }
+    };
+  </script>
+</head>
+<body style="background:#18181b;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
+  <div>
+    <h2>Password Reset Redirect</h2>
+    <p id="status">Redirecting to app...</p>
+  </div>
+</body>
+</html>

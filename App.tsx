@@ -3,6 +3,30 @@ import 'react-native-url-polyfill/auto'
 
 import * as React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
+// Deep linking config for the app
+const linking = {
+  prefixes: ['studypal://', 'https://stud-pal-ai-mobile-rebuild-xktk.vercel.app'],
+  config: {
+    screens: {
+      Login: 'login',
+      Signup: 'signup',
+      MainTabs: {
+        path: '',
+        screens: {
+          Chat: 'chat',
+          Notes: 'notes',
+          Plans: 'plans',
+          Profile: 'profile',
+        },
+      },
+      ForgotPassword: 'forgot-password',
+      ResetPassword: 'reset-password',
+      Mission: 'mission',
+      ContactUs: 'contact-us',
+      StripePaymentScreen: 'stripe-payment',
+    },
+  },
+};
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { LogBox } from 'react-native';
@@ -15,6 +39,7 @@ import MissionScreen from './src/screens/missionScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import ResetPassword from './src/pages/ResetPassword';
 
 
 LogBox.ignoreLogs(['Unsupported top level event type \"topInsetsChange\" dispatched']);
@@ -38,7 +63,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <StripeProvider publishableKey="pk_live_51RgCVxI3Uf0Ofl4lDYoyPZlcSWrGgHwuUw1UP3YbErpKcBeu4eqLLjCVSxezyH8oIPZSA2iG0tRmEeGzNHUnM0mL00KDz5HAML" merchantIdentifier="merchant.com.example">
-          <NavigationContainer key={refreshKey}>
+          <NavigationContainer linking={linking} key={refreshKey}>
             <Stack.Navigator initialRouteName="MainTabs">
               <Stack.Screen
                 name="Login"
@@ -59,6 +84,11 @@ export default function App() {
               <Stack.Screen
                 name="ForgotPassword"
                 component={ForgotPasswordScreen}
+                options={{ headerShown: false, presentation: 'modal' }}
+              />
+              <Stack.Screen
+                name="ResetPassword"
+                component={ResetPassword}
                 options={{ headerShown: false, presentation: 'modal' }}
               />
               <Stack.Screen
