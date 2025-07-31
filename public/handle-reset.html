@@ -6,14 +6,40 @@
   <title>Handle Password Reset Redirect</title>
   <script>
     window.onload = function() {
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('token');
-      const type = params.get('type');
+      // Parse query string
+      let params = new URLSearchParams(window.location.search);
+      let token = params.get('token');
+      let type = params.get('type');
+
+      // If not found, parse hash fragment
+      if (!token || !type) {
+        if (window.location.hash) {
+          // Remove leading #
+          let hash = window.location.hash.substring(1);
+          // If hash starts with '/', remove it
+          if (hash.startsWith('/')) hash = hash.substring(1);
+          // If hash contains '?', parse after '?'
+          let hashParamsStr = hash.includes('?') ? hash.split('?')[1] : hash;
+          let hashParams = new URLSearchParams(hashParamsStr);
+          token = token || hashParams.get('access_token') || hashParams.get('token');
+          type = type || hashParams.get('type');
+        }
+      }
+
+      const debugPanel = document.getElementById('debug');
+      debugPanel.innerHTML = `<strong>Params:</strong><br>token: ${token}<br>type: ${type}<br><br><strong>Location:</strong><br>search: ${window.location.search}<br>hash: ${window.location.hash}`;
+      console.log('handle-reset.html loaded');
+      console.log('Params:', { token, type });
       if (token && type === 'recovery') {
-        // Redirect to your app's deep link with token and type
-        window.location.href = `studypal://reset-password?token=${token}&type=${type}`;
+        const redirectUrl = `studypal://reset-password?token=${token}&type=${type}`;
+        console.log('Redirecting to:', redirectUrl);
+        document.getElementById('status').textContent = 'Redirecting to app...';
+        setTimeout(() => {
+          window.location.href = redirectUrl;
+        }, 1000);
       } else {
         document.getElementById('status').textContent = 'Invalid password reset link.';
+        console.log('Invalid link, not redirecting.');
       }
     };
   </script>
@@ -22,6 +48,7 @@
   <div>
     <h2>Password Reset Redirect</h2>
     <p id="status">Redirecting to app...</p>
+    <div id="debug" style="margin-top:24px;background:#23232a;padding:16px;border-radius:8px;color:#fff;font-size:14px;"></div>
   </div>
 </body>
 </html>
