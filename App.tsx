@@ -12,6 +12,7 @@ import LoginScreen from './src/screens/loginScreen';
 import SignupScreen from './src/screens/signupScreen';
 import BottomTabNavigator from './src/navigation/BotttomTabNavigator';
 import MissionScreen from './src/screens/missionScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 
@@ -54,6 +55,11 @@ export default function App() {
                 component={BottomTabNavigator}
                 options={{ headerShown: false }}
                 initialParams={{ screen: 'Chat' }}
+              />
+              <Stack.Screen
+                name="ForgotPassword"
+                component={ForgotPasswordScreen}
+                options={{ headerShown: false, presentation: 'modal' }}
               />
               <Stack.Screen
                 name="Mission"

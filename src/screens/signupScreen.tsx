@@ -62,11 +62,10 @@ const styles = StyleSheet.create({
   eyeBtn: {
     position: 'absolute',
     right: 14,
-    top: 0,
+    top: -11,
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 4,
     zIndex: 2,
   },
   loginBtn: {
@@ -131,6 +130,7 @@ const SignupScreen = ({ navigation }: any) => {
   const [showFailure, setShowFailure] = useState(false);
   const [userName, setUserName] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSignup = async () => {
     setLoading(true);
@@ -208,22 +208,30 @@ const SignupScreen = ({ navigation }: any) => {
             editable={!loading}
           />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#a0a0a0"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            editable={!loading}
-          />
 
-          {/* Lost Password link (now right after password input) */}
-          <View style={{ width: '100%', alignItems: 'flex-end', marginBottom: 16 }}>
-            <TouchableOpacity onPress={() => {/* TODO: Implement lost password navigation */}}>
-              <Text style={{ color: '#4285F4', fontWeight: 'bold', fontSize: 15 }}>Lost password?</Text>
+          <View style={{ width: '100%', position: 'relative' }}>
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#a0a0a0"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.eyeBtn}
+              onPress={() => setShowPassword((v) => !v)}
+              disabled={loading}
+            >
+              <Ionicons
+                name={showPassword ? 'eye' : 'eye-off'}
+                size={22}
+                color="#a0a0a0"
+              />
             </TouchableOpacity>
           </View>
+
 
           <TouchableOpacity
             style={styles.loginBtn}

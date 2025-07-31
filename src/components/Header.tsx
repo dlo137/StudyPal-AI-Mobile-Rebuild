@@ -113,7 +113,20 @@ const Header: React.FC<HeaderProps> = ({ onProfilePress, onUpgradePress, onSignI
                   >
                     <Text style={[styles.menuItemText, { color: theme.text }]}>Log In</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.menuItem} onPress={() => { setMenuVisible(false); onUpgradePress && onUpgradePress(); }}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      setMenuVisible(false);
+                      // Try navigation first, fallback to onUpgradePress
+                      if (navigation && typeof navigation.navigate === 'function') {
+                        (navigation as any).navigate('Signup');
+                      } else if (onUpgradePress) {
+                        onUpgradePress();
+                      } else {
+                        Alert.alert('Navigation not set up', 'No navigation or onUpgradePress handler provided.');
+                      }
+                    }}
+                  >
                     <Text style={[styles.menuItemText, { color: theme.text }]}>Sign Up</Text>
                   </TouchableOpacity>
                 </>

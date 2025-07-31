@@ -86,8 +86,9 @@ const NotesScreen: React.FC = () => {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}> 
       <Header hidePlus={true} />
       <View style={styles.centeredContentWrapper}>
-        {/* Search bar */}
+        {/* All Notes title and Search bar */}
         <View style={styles.searchBarWrapper}>
+          <Text style={{ color: theme.text, fontSize: 22, fontWeight: 'bold', marginBottom: 16, textAlign: 'left', alignSelf: 'flex-start', paddingTop: 8 }}>All Notes</Text>
           <TextInput
             style={[styles.searchBar, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
             placeholder="Search notes..."
@@ -102,9 +103,7 @@ const NotesScreen: React.FC = () => {
           keyExtractor={item => item.id}
           ListEmptyComponent={loading ? (
             <Text style={{ color: theme.textSecondary, fontSize: 16, textAlign: 'center', marginTop: 32 }}>Loading...</Text>
-          ) : (
-            <Text style={{ color: theme.textSecondary, fontSize: 16, textAlign: 'center', marginTop: 32 }}>No notes yet.</Text>
-          )}
+          ) : null}
           renderItem={({ item }) => (
             <TouchableOpacity style={[styles.noteCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => openEditor(item)}>
               <View style={styles.noteHeader}>
@@ -120,10 +119,21 @@ const NotesScreen: React.FC = () => {
           style={{ width: '100%', flex: 1 }}
           contentContainerStyle={{ paddingBottom: 80 }}
         />
-        {/* Floating Add Button */}
-        <TouchableOpacity style={[styles.fab, { backgroundColor: theme.accent }]} onPress={() => openEditor()}>
-          <Text style={styles.fabText}>+</Text>
-        </TouchableOpacity>
+        {/* Floating Add Button: only show if there are notes */}
+        {filteredNotes.length > 0 && (
+          <TouchableOpacity style={[styles.fab, { backgroundColor: theme.accent }]} onPress={() => openEditor()}>
+            <Text style={styles.fabText}>+</Text>
+          </TouchableOpacity>
+        )}
+        {/* Empty notes bottom container */}
+        {!loading && filteredNotes.length === 0 && (
+          <View style={styles.emptyNotesContainer}>
+            <Text style={{ color: theme.textSecondary, fontSize: 16, textAlign: 'left' }}>No notes yet.</Text>
+            <TouchableOpacity style={styles.emptyFab} onPress={() => openEditor()}>
+              <Text style={[styles.fabText, { fontSize: 24 }]}>+</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {/* Undo Snackbar */}
         {undoNote && (
           <Animated.View style={[styles.snackbar, { backgroundColor: theme.card }]}> 
@@ -174,6 +184,27 @@ const NotesScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  emptyNotesContainer: {
+    position: 'absolute',
+    right: 18,
+    bottom: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emptyFab: {
+    backgroundColor: '#7c3aed', // fallback accent color, will be overridden inline
+    marginLeft: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+  },
   safeArea: { flex: 1, backgroundColor: '#141417' },
   centeredContentWrapper: {
     flex: 1,
@@ -268,7 +299,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     right: 24,
-    bottom: 90,
+    bottom: 110,
     padding: 14,
     borderRadius: 10,
     flexDirection: 'row',

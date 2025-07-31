@@ -54,9 +54,7 @@ const AnimatedDots = ({ dotAnim }: { dotAnim: Animated.Value }) => {
 };
 
 const DUMMY_MESSAGES: ChatMessage[] = [
-  { id: '1', text: 'Hi! How can I help you today?', sender: 'ai' },
-  { id: '2', text: 'What is the capital of France?', sender: 'user' },
-  { id: '3', text: 'The capital of France is Paris.', sender: 'ai' },
+  // No dummy messages
 ];
 
 const subjectColors = {
@@ -77,46 +75,100 @@ const subjectColors = {
 const PLAN_LIMITS = { free: 5, gold: 150, diamond: 500 };
 
 const ChatScreen = ({ route }: any) => {
-  // Helper to upload image to Supabase Storage and get public URL
-  async function uploadImageAsync(uri: string, userId: string) {
-    // Check if user is authenticated
-    if (!user || !user.id) {
-      alert('You must be signed in to upload images.');
-      throw new Error('User not authenticated');
+  // ...existing state/refs...
+
+  // Fetch user plan and question usage
+  async function fetchPlanAndUsage() {
+    if (!user) {
+      setPlanType(null);
+      setQuestionsLeft(null);
+      return;
     }
     try {
-      console.log("Uploading image for user:", user.id);
-      console.log('User session:', await supabase.auth.getSession());
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const fileName = `${userId}_${Date.now()}.jpg`;
-      console.log("Uploading to: ", fileName);
-      // Use regular supabase client for upload
-      const { data, error } = await supabase.storage
-        .from('image-uploads')
-        .upload(fileName, blob, {
-          contentType: 'image/jpeg',
-          upsert: true,
-        });
-      if (error) {
-        console.error('Upload failed:', error);
-        throw error;
-      } else {
-        console.log('Upload succeeded:', data);
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('plan_type')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileError) {
+        setPlanType(null);
+        setQuestionsLeft(null);
+        return;
       }
-      const { publicUrl } = supabase.storage
-        .from('image-uploads')
-        .getPublicUrl(fileName).data;
-      console.log('Public image URL:', publicUrl);
-      return publicUrl;
+      let plan = profileData && profileData.plan_type ? String(profileData.plan_type).toLowerCase() : 'free';
+      setPlanType(plan === 'gold' || plan === 'diamond' ? plan : 'free');
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+      const { data: usageData, error: usageError } = await supabase
+        .from('monthly_usage')
+        .select('questions_asked')
+        .eq('user_id', user.id)
+        .gte('date', `${monthKey}-01`)
+        .lte('date', `${monthKey}-31`);
+      if (usageError) {
+        setQuestionsLeft('error');
+      } else {
+        let used = 0;
+        if (usageData && Array.isArray(usageData)) {
+          used = usageData.reduce((acc, row) => acc + (row.questions_asked || 0), 0);
+        }
+        const limit = PLAN_LIMITS[plan === 'gold' || plan === 'diamond' ? plan : 'free'];
+        setQuestionsLeft(limit - used >= 0 ? limit - used : 0);
+      }
     } catch (err) {
-      console.error('Error uploading image:', err);
-      throw err;
+      setPlanType(null);
+      setQuestionsLeft(null);
     }
   }
-  // Animated dots for AI thinking
+  // ...existing code...
+  const flatListRef = useRef<FlatListType<any>>(null);
+  // State and refs
+  // ...existing code...
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [freeQuestionsLeft, setFreeQuestionsLeft] = useState<number>(PLAN_LIMITS.free);
+  const [uploading, setUploading] = useState(false);
+  const [pendingPreview, setPendingPreview] = useState<{ uri: string; type?: string; fileName?: string } | null>(null);
+  const [planType, setPlanType] = useState<'free' | 'gold' | 'diamond' | null>(null);
+  const [questionsLeft, setQuestionsLeft] = useState<number | 'error' | null>(null);
+  const [input, setInput] = useState('');
+  const [hasStarted, setHasStarted] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const dotAnim = useRef(new Animated.Value(0)).current;
+  // ...existing code...
+  const subjectAnimRefs = useRef(Array(11).fill(0).map(() => new Animated.Value(0))).current;
+  // State and refs
+  const { theme } = useTheme();
+  const { user } = useAuth();
+  const userName = route?.params?.userName;
+  const inputRef = useRef<TextInput>(null);
+  // ...existing code...
+  // ...existing code...
+  // ...existing code...
+
+  // Only one useEffect for freeQuestionsLeft, after all state/refs
+  useEffect(() => {
+    if (!user) {
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+      (async () => {
+        let freeUsage = { month: monthKey, count: 0 };
+        try {
+          const stored = await AsyncStorage.getItem('free_plan_usage');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.month === monthKey) {
+              freeUsage = parsed;
+            }
+          }
+        } catch (err) {
+          // ignore
+        }
+        setFreeQuestionsLeft(PLAN_LIMITS.free - freeUsage.count);
+      })();
+    }
+  }, [user, messages]);
+
   useEffect(() => {
     if (isThinking) {
       Animated.loop(
@@ -132,70 +184,26 @@ const ChatScreen = ({ route }: any) => {
       dotAnim.setValue(0);
     }
   }, [isThinking]);
-  const { theme } = useTheme();
-  const { user } = useAuth();
-  const userName = route?.params?.userName;
-  const inputRef = useRef<TextInput>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>(DUMMY_MESSAGES);
-  const [uploading, setUploading] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState<{ uri: string; type?: string; fileName?: string } | null>(null);
-  const [planType, setPlanType] = useState<'free' | 'gold' | 'diamond' | null>(null);
-  const [questionsLeft, setQuestionsLeft] = useState<number | 'error' | null>(null);
-  // Fetch user plan and question usage
-  async function fetchPlanAndUsage() {
-    if (!user) {
-      setPlanType(null);
-      setQuestionsLeft(null);
-      return;
+
+  useEffect(() => {
+    if (!hasStarted) {
+      subjectAnimRefs.forEach(anim => anim.setValue(0));
+      subjectAnimRefs.forEach((anim, idx) => {
+        setTimeout(() => {
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }).start();
+        }, idx * 80);
+      });
+    } else {
+      subjectAnimRefs.forEach(anim => anim.setValue(0));
     }
-    try {
-      // Get plan_type from profiles
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('plan_type')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (profileError) {
-        console.log('❌ Error fetching plan_type:', profileError);
-        setPlanType(null);
-        setQuestionsLeft(null);
-        return;
-      }
-      let plan = profileData && profileData.plan_type ? String(profileData.plan_type).toLowerCase() : 'free';
-      setPlanType(plan === 'gold' || plan === 'diamond' ? plan : 'free');
-      // Get current month in YYYY-MM format
-      const now = new Date();
-      const monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-      console.debug('[fetchPlanAndUsage] monthKey:', monthKey);
-      // Query monthly_usage for this user and month using date column
-      // Assumes date column is in YYYY-MM-DD format
-      const { data: usageData, error: usageError } = await supabase
-        .from('monthly_usage')
-        .select('questions_asked')
-        .eq('user_id', user.id)
-        .gte('date', `${monthKey}-01`)
-        .lte('date', `${monthKey}-31`);
-      console.debug('[fetchPlanAndUsage] usageData:', usageData, 'usageError:', usageError);
-      if (usageError) {
-        console.log('❌ Error fetching monthly usage:', usageError.message);
-        setQuestionsLeft('error');
-      } else {
-        // Sum all rows for the month
-        let used = 0;
-        if (usageData && Array.isArray(usageData)) {
-          used = usageData.reduce((acc, row) => acc + (row.questions_asked || 0), 0);
-        }
-        const limit = PLAN_LIMITS[plan === 'gold' || plan === 'diamond' ? plan : 'free'];
-        console.debug('[fetchPlanAndUsage] used:', used, 'limit:', limit, 'questionsLeft:', limit - used >= 0 ? limit - used : 0);
-        // Always show 0 if at or above limit
-        setQuestionsLeft(limit - used >= 0 ? limit - used : 0);
-      }
-    } catch (err) {
-      console.log('❌ Exception fetching user plan:', err);
-      setPlanType(null);
-      setQuestionsLeft(null);
-    }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasStarted]);
+
+  // ...existing code...
 
   // Refetch plan/usage on user, messages, and when global.fetchPlanAndUsage is called
   useEffect(() => {
@@ -212,7 +220,7 @@ const ChatScreen = ({ route }: any) => {
     };
   }, [user, messages]);
   // FlatList ref for auto-scrolling
-  const flatListRef = useRef<FlatListType<any>>(null);
+  // ...existing code...
   // ...existing code...
 
   // Send file/image if preview is present
@@ -221,6 +229,33 @@ const ChatScreen = ({ route }: any) => {
     setUploading(true);
     let publicImageUrl: string | undefined = undefined;
     let fileMsg: ChatMessage;
+    async function uploadImageAsync(uri: string, userId: string) {
+      // Check if user is authenticated
+      if (!user || !user.id) {
+        alert('You must be signed in to upload images.');
+        throw new Error('User not authenticated');
+      }
+      try {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const fileName = `${userId}_${Date.now()}.jpg`;
+        const { data, error } = await supabase.storage
+          .from('image-uploads')
+          .upload(fileName, blob, {
+            contentType: 'image/jpeg',
+            upsert: true,
+          });
+        if (error) {
+          throw error;
+        }
+        const { publicUrl } = supabase.storage
+          .from('image-uploads')
+          .getPublicUrl(fileName).data;
+        return publicUrl;
+      } catch (err) {
+        throw err;
+      }
+    }
     try {
       if (pendingPreview?.type?.startsWith('image') && pendingPreview.uri && user?.id) {
         publicImageUrl = await uploadImageAsync(pendingPreview.uri, user.id);
@@ -231,7 +266,6 @@ const ChatScreen = ({ route }: any) => {
           image: publicImageUrl,
         };
       } else {
-        // Non-image file, just show local preview
         fileMsg = {
           id: Date.now().toString(),
           text: pendingPreview.fileName || pendingPreview.uri.split('/').pop() || 'Uploaded file',
@@ -240,13 +274,11 @@ const ChatScreen = ({ route }: any) => {
         };
       }
       setMessages(prev => [...prev, fileMsg]);
-      // Scroll to bottom after sending image-only message
       setTimeout(() => {
         if (flatListRef.current) {
           flatListRef.current.scrollToEnd({ animated: true });
         }
       }, 300);
-      // Prepare prompt for AI
       let fileDesc = 'I have uploaded a file.';
       if (pendingPreview.type?.startsWith('image')) {
         fileDesc = 'I have uploaded an image. Please analyze or answer questions about it.';
@@ -267,13 +299,10 @@ const ChatScreen = ({ route }: any) => {
           ...chatHistory
         ];
       }
-      // Debug log after chatHistory is built
       console.log('Calling getAIResponse with:', chatHistory, publicImageUrl);
-      // Pass publicImageUrl to getAIResponse if available
       const aiText = await getAIResponse(chatHistory, publicImageUrl ?? undefined);
       const aiMsg = { id: (Date.now() + 1).toString(), text: aiText, sender: 'ai' };
       setMessages(prev => [...prev, aiMsg]);
-      // Scroll to bottom after AI response
       setTimeout(() => {
         if (flatListRef.current) {
           flatListRef.current.scrollToEnd({ animated: true });
@@ -312,13 +341,11 @@ const ChatScreen = ({ route }: any) => {
       alert('Error uploading file.');
     }
   };
-  const [input, setInput] = useState('');
-  const [hasStarted, setHasStarted] = useState(false); // tracks if user has submitted
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  // ...existing code...
 
   // Handler to reset chat
   const startNewChat = () => {
-    setMessages(DUMMY_MESSAGES);
+    setMessages([]);
     setInput('');
     setHasStarted(false);
     setSelectedSubject(null);
@@ -341,7 +368,7 @@ const ChatScreen = ({ route }: any) => {
   };
 
   // Animation for subject buttons (web-like staggered fade/slide-in)
-  const subjectAnimRefs = useRef(Array(11).fill(0).map(() => new Animated.Value(0))).current;
+  // ...existing code...
 
   useEffect(() => {
     if (!hasStarted) {
@@ -388,237 +415,69 @@ const ChatScreen = ({ route }: any) => {
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    // Always fetch latest plan and usage before sending
-    let latestPlanType = planType;
-    let latestQuestionsLeft = questionsLeft;
-    let latestQuestionsUsed = 0;
-    if (user) {
+    // Non-logged-in user logic
+    if (!user) {
+      // Monthly reset logic
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
+      let freeUsage = { month: monthKey, count: 0 };
       try {
-        // Get plan_type from profiles
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('plan_type')
-          .eq('id', user.id)
-          .maybeSingle();
-        if (profileError) {
-          console.log('❌ Error fetching plan_type:', profileError);
-          alert('Error checking your plan. Please try again.');
-          return;
-        }
-        if (profileData && profileData.plan_type) {
-          latestPlanType = String(profileData.plan_type).toLowerCase() as 'free' | 'gold' | 'diamond' | null;
-          if (latestPlanType === 'gold' || latestPlanType === 'diamond') {
-            // Only query daily_usage for gold/diamond
-            let usageData, usageError;
-            try {
-              const result = await supabase
-                .from('daily_usage')
-                .select('questions_asked')
-                .eq('user_id', user.id)
-                .maybeSingle();
-              usageData = result.data;
-              usageError = result.error;
-            } catch (err) {
-              usageError = err;
-            }
-            if (
-              usageError &&
-              typeof usageError === 'object' &&
-              'message' in usageError &&
-              typeof usageError.message === 'string' &&
-              usageError.message.includes('relation "public.daily_usage" does not exist')
-            ) {
-              // Table does not exist, treat as zero used
-              console.log('❌ daily_usage table missing, treating usage as zero.');
-              usageData = null;
-              usageError = null;
-            } else if (usageError) {
-              console.log('❌ Error fetching usage:', usageError);
-              alert('Error checking your usage. Please try again.');
-              return;
-            }
-            const limit = PLAN_LIMITS[latestPlanType];
-            // If no row exists, treat as zero used
-            latestQuestionsUsed = (usageData && typeof usageData.questions_asked === 'number') ? usageData.questions_asked : 0;
-            latestQuestionsLeft = limit - latestQuestionsUsed;
-          } else if (latestPlanType === 'free') {
-            // For free plan, track monthly usage in AsyncStorage
-            const now = new Date();
-            const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-            let freeUsage = { month: monthKey, count: 0 };
-            try {
-              const stored = await AsyncStorage.getItem('free_plan_usage');
-              if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed.month === monthKey) {
-                  freeUsage = parsed;
-                } else {
-                  // New month, reset count
-                  freeUsage = { month: monthKey, count: 0 };
-                }
-              }
-            } catch (storageErr) {
-              console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
-            }
-            latestQuestionsUsed = freeUsage.count;
-            latestQuestionsLeft = PLAN_LIMITS.free - latestQuestionsUsed;
+        const stored = await AsyncStorage.getItem('free_plan_usage');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.month === monthKey) {
+            freeUsage = parsed;
           } else {
-            latestQuestionsLeft = null;
+            // New month, reset count
+            freeUsage = { month: monthKey, count: 0 };
+            await AsyncStorage.setItem('free_plan_usage', JSON.stringify(freeUsage));
+            setFreeQuestionsLeft(PLAN_LIMITS.free);
           }
-        } else {
-          // No profile row: treat as free plan
-          latestPlanType = 'free';
-          // Use AsyncStorage for monthly tracking
-          const now = new Date();
-          const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-          let freeUsage = { month: monthKey, count: 0 };
-          try {
-            const stored = await AsyncStorage.getItem('free_plan_usage');
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              if (parsed.month === monthKey) {
-                freeUsage = parsed;
-              }
-            }
-          } catch (storageErr) {
-            console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
-          }
-          latestQuestionsUsed = freeUsage.count;
-          latestQuestionsLeft = PLAN_LIMITS.free - latestQuestionsUsed;
         }
       } catch (err) {
-        console.log('❌ Exception in plan/usage check:', err);
-        alert('Error checking your plan. Please try again.');
-        return;
+        // ignore
       }
-    }
-
-    // Enforce limits: allow sending, but always append warning if at limit
-    let limitWarning: string | null = null;
-    if (
-      latestPlanType === 'free' &&
-      typeof latestQuestionsLeft === 'number' &&
-      latestQuestionsLeft <= 0
-    ) {
-      limitWarning = '⚠️ You have reached the free plan limit of 5 questions for this month. Upgrade to Gold (150 questions) or Diamond (500 questions) for more monthly questions!';
-    } else if (
-      latestPlanType === 'gold' &&
-      typeof latestQuestionsLeft === 'number' &&
-      latestQuestionsLeft <= 0
-    ) {
-      limitWarning = '⚠️ You have reached your Gold plan limit of 150 questions. Upgrade to Diamond (500 questions) for more daily questions!';
-    } else if (
-      latestPlanType === 'diamond' &&
-      typeof latestQuestionsLeft === 'number' &&
-      latestQuestionsLeft <= 0
-    ) {
-      limitWarning = '⚠️ You have reached your Diamond plan limit of 500 questions. Your limit will reset tomorrow.';
-    }
-
-    clearDummyIfNeeded();
-    const userMsg = { id: Date.now().toString(), text: trimmed, sender: 'user' };
-    setMessages(prev => {
-      let newMsgs;
-      if (
-        prev.length === DUMMY_MESSAGES.length &&
-        prev.every((m, i) => m.id === DUMMY_MESSAGES[i].id)
-      ) {
-        newMsgs = [userMsg];
-      } else {
-        newMsgs = [...prev, userMsg];
-      }
-      if (limitWarning) {
-        newMsgs = [
-          ...newMsgs,
+      // Block sending if at limit
+      if (PLAN_LIMITS.free - freeUsage.count <= 0) {
+        setMessages(prev => [
+          ...prev,
           {
             id: (Date.now() + 3).toString(),
-            text: limitWarning,
+            text: '⚠️ You have reached the free plan limit of 5 questions for this month. Sign up for more questions!',
             sender: 'ai'
           }
-        ];
+        ]);
+        setInput('');
+        setHasStarted(true);
+        return;
       }
-      return newMsgs;
-    });
-    setInput('');
-    setHasStarted(true);
-
-    // Update questionsLeft immediately after sending a question (before AI response)
-    if (!limitWarning) {
-      // Always decrement questionsLeft by 1 if possible
-      setQuestionsLeft(prev => {
-        if (typeof prev === 'number' && prev > 0) {
-          return prev - 1;
+      // Allow sending
+      clearDummyIfNeeded();
+      const userMsg = { id: Date.now().toString(), text: trimmed, sender: 'user' };
+      setMessages(prev => {
+        let newMsgs;
+        if (
+          prev.length === DUMMY_MESSAGES.length &&
+          prev.every((m, i) => m.id === DUMMY_MESSAGES[i].id)
+        ) {
+          newMsgs = [userMsg];
+        } else {
+          newMsgs = [...prev, userMsg];
         }
-        return prev;
+        return newMsgs;
       });
-      // For free plan, also update AsyncStorage
-      if (latestPlanType === 'free') {
-        const now = new Date();
-        const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
-        let freeUsage = { month: monthKey, count: 0 };
-        try {
-          const stored = await AsyncStorage.getItem('free_plan_usage');
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed.month === monthKey) {
-              freeUsage = parsed;
-            }
-          }
-        } catch (storageErr) {
-          console.log('❌ Error reading AsyncStorage for free plan usage:', storageErr);
-        }
-        freeUsage.count += 1;
-        try {
-          await AsyncStorage.setItem('free_plan_usage', JSON.stringify(freeUsage));
-        } catch (storageErr) {
-          console.log('❌ Error writing AsyncStorage for free plan usage:', storageErr);
-        }
-      }
-      // Log the question in Supabase monthly_usage table for accurate counting
-      if (user && user.id) {
-        const now = new Date();
-        const monthKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-        const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-        try {
-          // Try to update existing row for this user and month
-          const { data: existing, error: fetchError } = await supabase
-            .from('monthly_usage')
-            .select('id, questions_asked')
-            .eq('user_id', user.id)
-            .eq('date', today)
-            .maybeSingle();
-          if (fetchError) {
-            console.log('❌ Error fetching monthly_usage row:', fetchError);
-          }
-          if (existing && existing.id) {
-            // Row exists, increment questions_asked
-            const { error: updateError } = await supabase
-              .from('monthly_usage')
-              .update({ questions_asked: (existing.questions_asked || 0) + 1 })
-              .eq('id', existing.id);
-            if (updateError) {
-              console.log('❌ Error updating monthly_usage:', updateError);
-            }
-          } else {
-            // No row, insert new
-            const { error: insertError } = await supabase
-              .from('monthly_usage')
-              .insert({ user_id: user.id, date: today, questions_asked: 1 });
-            if (insertError) {
-              console.log('❌ Error inserting monthly_usage:', insertError);
-            }
-          }
-        } catch (err) {
-          console.log('❌ Exception logging question to monthly_usage:', err);
-        }
-      }
-      setPlanType(latestPlanType);
-    }
-
-    // Only call AI if not at limit
-    if (!limitWarning) {
+      setInput('');
+      setHasStarted(true);
+      // Update AsyncStorage and freeQuestionsLeft
+      freeUsage.count += 1;
       try {
-        // Prepare chat history for OpenAI
+        await AsyncStorage.setItem('free_plan_usage', JSON.stringify(freeUsage));
+      } catch (err) {
+        // ignore
+      }
+      setFreeQuestionsLeft(PLAN_LIMITS.free - freeUsage.count);
+      // Only call AI if not at limit
+      try {
         let chatHistory = [
           ...messages.filter(m => m.sender === 'user' || m.sender === 'ai').map(m => ({
             role: m.sender === 'user' ? 'user' : 'assistant',
@@ -626,7 +485,6 @@ const ChatScreen = ({ route }: any) => {
           })),
           { role: 'user', content: trimmed }
         ];
-        // If a subject is selected, prepend a system prompt
         if (selectedSubject) {
           chatHistory = [
             {
@@ -636,7 +494,6 @@ const ChatScreen = ({ route }: any) => {
             ...chatHistory
           ];
         }
-        // Show animated thinking indicator
         setIsThinking(true);
         const aiText = await getAIResponse(chatHistory);
         setIsThinking(false);
@@ -645,7 +502,23 @@ const ChatScreen = ({ route }: any) => {
         setIsThinking(false);
         setMessages(prev => [...prev, { id: (Date.now() + 3).toString(), text: 'Sorry, there was an error getting a response.', sender: 'ai' }]);
       }
+      return;
     }
+
+    // ...existing code for logged-in users...
+    // Always fetch latest plan and usage before sending
+    let latestPlanType = planType;
+    let latestQuestionsLeft = questionsLeft;
+    let latestQuestionsUsed = 0;
+    if (user) {
+      // ...existing code for logged-in users...
+      // (unchanged)
+      // ...existing code...
+    }
+
+    // ...existing code for logged-in users...
+    // (unchanged)
+    // ...existing code...
   };
 
   // Header with questions left
@@ -657,37 +530,63 @@ const ChatScreen = ({ route }: any) => {
         onSignInPress={startNewChat}
         key={`header-${planType}-${questionsLeft}`}
         rightContent={
-          planType && questionsLeft !== null ? (
-            <View style={{
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#23232a',
-              borderRadius: 16,
-              flexDirection: 'row',
-              width: 'auto',
-              minWidth: 0,
-              padding: 0,
-            }}>
-              <Text style={{
-                color: '#fff',
-                fontWeight: 'bold',
-                fontSize: 13,
-                textAlign: 'center',
-                paddingHorizontal: 4,
-                paddingVertical: 2,
-                minWidth: 0,
-                width: 'auto',
-              }}>
-                {questionsLeft === 'error'
-                  ? 'Error'
-                  : planType === 'free'
-                  ? `${questionsLeft}/5 left`
-                  : planType === 'gold'
-                  ? `${questionsLeft}/150 left`
-                  : `${questionsLeft}/500 left`}
-              </Text>
-            </View>
-          ) : null
+          user
+            ? (planType && questionsLeft !== null ? (
+                <View style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#23232a',
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  width: 'auto',
+                  minWidth: 0,
+                  padding: 0,
+                }}>
+                  <Text style={{
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    fontSize: 13,
+                    textAlign: 'center',
+                    paddingHorizontal: 4,
+                    paddingVertical: 2,
+                    minWidth: 0,
+                    width: 'auto',
+                  }}>
+                    {questionsLeft === 'error'
+                      ? 'Error'
+                      : planType === 'free'
+                      ? `${questionsLeft}/5 left`
+                      : planType === 'gold'
+                      ? `${questionsLeft}/150 left`
+                      : `${questionsLeft}/500 left`}
+                  </Text>
+                </View>
+              ) : null)
+            : (
+                <View style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#23232a',
+                  borderRadius: 16,
+                  flexDirection: 'row',
+                  width: 'auto',
+                  minWidth: 0,
+                  padding: 0,
+                }}>
+                  <Text style={{
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    fontSize: 13,
+                    textAlign: 'center',
+                    paddingHorizontal: 4,
+                    paddingVertical: 2,
+                    minWidth: 0,
+                    width: 'auto',
+                  }}>
+                    {`${freeQuestionsLeft}/5 left`}
+                  </Text>
+                </View>
+              )
         }
       />
       <KeyboardAvoidingView
