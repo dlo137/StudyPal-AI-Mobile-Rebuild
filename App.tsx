@@ -21,11 +21,23 @@ LogBox.ignoreLogs(['Unsupported top level event type \"topInsetsChange\" dispatc
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const [refreshKey, setRefreshKey] = React.useState(0);
+
+  // Expose global refresh function
+  React.useEffect(() => {
+    (globalThis as any).refreshApp = () => {
+      setRefreshKey(k => k + 1);
+    };
+    return () => {
+      (globalThis as any).refreshApp = undefined;
+    };
+  }, []);
+
   return (
     <ThemeProvider>
       <AuthProvider>
         <StripeProvider publishableKey="pk_live_51RgCVxI3Uf0Ofl4lDYoyPZlcSWrGgHwuUw1UP3YbErpKcBeu4eqLLjCVSxezyH8oIPZSA2iG0tRmEeGzNHUnM0mL00KDz5HAML" merchantIdentifier="merchant.com.example">
-          <NavigationContainer>
+          <NavigationContainer key={refreshKey}>
             <Stack.Navigator initialRouteName="MainTabs">
               <Stack.Screen
                 name="Login"

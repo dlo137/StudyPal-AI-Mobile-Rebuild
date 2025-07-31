@@ -42,13 +42,13 @@ declare global {
 }
 
 interface StripePaymentScreenProps {
-  route: { params: { planType: PlanType } };
+  route: { params: { planType: PlanType, onPlanChanged?: () => void } };
   navigation: { goBack: () => void };
 }
 
 const StripePaymentScreen = ({ route, navigation }: StripePaymentScreenProps) => {
   // Local state for planType to ensure UI updates after fetch
-  const { planType: initialPlanType } = route.params;
+  const { planType: initialPlanType, onPlanChanged } = route.params;
   const { theme } = useTheme();
   const { user } = useAuth();
   const { confirmPayment } = useStripe();
@@ -167,6 +167,15 @@ const StripePaymentScreen = ({ route, navigation }: StripePaymentScreenProps) =>
             // Immediately refetch plan type after update
             if (typeof global.fetchPlanAndUsage === 'function') {
               await global.fetchPlanAndUsage();
+            }
+            // Call onPlanChanged callback if provided (to trigger app-wide refresh)
+            if (typeof onPlanChanged === 'function') {
+              try {
+                await onPlanChanged();
+                console.log('[DEBUG] onPlanChanged callback called after payment success');
+              } catch (err) {
+                console.log('[DEBUG] Error calling onPlanChanged:', err);
+              }
             }
           } catch (err) {
             console.log('❌ Error updating plan_type in Supabase:', err);

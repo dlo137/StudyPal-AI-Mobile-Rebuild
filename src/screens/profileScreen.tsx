@@ -109,13 +109,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <View style={[styles.planBadge, { backgroundColor: theme.menu }]}> 
               {userPlan === 'Gold' && (
                 <>
-                  <FontAwesome5 name="star" size={16} color="#FFD700" style={{ marginRight: 6 }} />
+                  <MaterialCommunityIcons name="gold" size={18} color="#FFD700" style={{ marginRight: 6 }} />
                   <Text style={[styles.planText, { color: theme.text }]}>Gold Member</Text>
                 </>
               )}
               {userPlan === 'Diamond' && (
                 <>
-                  <FontAwesome5 name="crown" size={16} color={theme.accentSecondary} style={{ marginRight: 6 }} />
+                  <MaterialCommunityIcons name="diamond-stone" size={18} color={theme.accentSecondary} style={{ marginRight: 6 }} />
                   <Text style={[styles.planText, { color: theme.text }]}>Diamond Member</Text>
                 </>
               )}

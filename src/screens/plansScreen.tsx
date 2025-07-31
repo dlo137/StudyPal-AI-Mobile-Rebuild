@@ -8,6 +8,7 @@ import { FontAwesome5, Feather } from '@expo/vector-icons';
 import Header from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 
 const plans = [
@@ -26,26 +27,26 @@ const plans = [
   {
     key: 'gold',
     title: 'Gold Plan',
-    price: '$4.99/mo',
+    price: '$1.99/mo',
     features: [
       '150 Requests / Monthly',
       'Email Support',
       'Priority Access to New Features'
     ],
-    icon: <FontAwesome5 name="star" size={11} color="#fff" />,
+    icon: <MaterialCommunityIcons name="gold" size={15} color="#FFD700" />,
     gradient: ['#8C52FF', '#FFD700']
   },
   {
     key: 'diamond',
     title: 'Diamond Plan',
-    price: '$9.99/mo',
+    price: '$4.99/mo',
     features: [
       '500 Requests / Monthly',
       'Email Support',
       'Priority Access to New Features',
       'Priority Support'
     ],
-    icon: <FontAwesome5 name="crown" size={11} color="#fff" />,
+    icon: <MaterialCommunityIcons name="diamond-stone" size={15} color="#5CE1E6" />,
     gradient: ['#8C52FF', '#5CE1E6']
   }
 ];
@@ -221,7 +222,14 @@ const PlansScreen = ({ navigation }: any) => {
             onConfirm={() => {
               setShowPlanUpgrade(false);
               if (planChangeInfo) {
-                navigation.navigate('StripePaymentScreen', { planType: planChangeInfo.to });
+                navigation.navigate('StripePaymentScreen', { planType: planChangeInfo.to, onPlanChanged: () => {
+                  // Refresh the app after successful payment and plan change
+                  if (typeof (globalThis as any).refreshApp === 'function') {
+                    setTimeout(() => {
+                      (globalThis as any).refreshApp();
+                    }, 400);
+                  }
+                }});
                 setPlanChangeInfo(null);
               }
             }}
@@ -249,6 +257,12 @@ const PlansScreen = ({ navigation }: any) => {
                     if (typeof global.fetchPlanAndUsage === 'function') {
                       await global.fetchPlanAndUsage();
                     }
+                    // Refresh the app after downgrade
+                    if (typeof (globalThis as any).refreshApp === 'function') {
+                      setTimeout(() => {
+                        (globalThis as any).refreshApp();
+                      }, 1200);
+                    }
                   }
                   setPlanChangeInfo(null);
                 }
@@ -259,29 +273,28 @@ const PlansScreen = ({ navigation }: any) => {
           )}
           {/* Bottom Call-to-Action Section */}
           <View style={styles.bottomCta}>
-            <View style={{ flex: 1 }}>
-              <TouchableOpacity
-                style={[styles.trialBtn, { backgroundColor: theme.accent }]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  if (!user) {
-                    navigation.navigate('Signup');
-                    return;
-                  }
-                  if (userPlan && userPlan !== 'diamond') {
-                    setPlanChangeInfo({ from: userPlan as 'free' | 'gold' | 'diamond', to: 'diamond' });
-                    setShowPlanUpgrade(true);
-                    return;
-                  }
-                  // If already on diamond, do nothing
-                }}
-              >
-                <Text style={[styles.trialBtnText, { color: theme.text }]}>Start Free Trial</Text>
-              </TouchableOpacity>
-              <Text style={[styles.trialText, { color: theme.textSecondary }]}>
-                7-day free diamond trial, then $9.99/month
-              </Text>
-            </View>
+            {userPlan !== 'diamond' && (
+              <View style={{ flex: 1 }}>
+                <TouchableOpacity
+                  style={[styles.trialBtn, { backgroundColor: theme.accent }]}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (!user) {
+                      navigation.navigate('Signup');
+                      return;
+                    }
+                    if (userPlan && userPlan !== 'diamond') {
+                      setPlanChangeInfo({ from: userPlan as 'free' | 'gold' | 'diamond', to: 'diamond' });
+                      setShowPlanUpgrade(true);
+                      return;
+                    }
+                    // If already on diamond, do nothing
+                  }}
+                >
+                  <Text style={[styles.trialBtnText, { color: theme.text }]}>Get Started With Diamond</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </ScrollView>
       </View>

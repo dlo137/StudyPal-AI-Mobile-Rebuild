@@ -1,11 +1,10 @@
-
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { useTheme } from '../context/ThemeContext';
+import { supabase } from '../lib/supabase';
 
 const ContactUsScreen = ({ navigation }: any) => {
   const { theme } = useTheme();
@@ -15,6 +14,23 @@ const ContactUsScreen = ({ navigation }: any) => {
     subject: '',
     message: '',
   });
+  // Fetch user email from Supabase profiles table
+  React.useEffect(() => {
+    const fetchEmail = async () => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (user && user.id) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', user.id)
+          .single();
+        if (data && data.email) {
+          setFormData(prev => ({ ...prev, email: data.email }));
+        }
+      }
+    };
+    fetchEmail();
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -26,14 +42,27 @@ const ContactUsScreen = ({ navigation }: any) => {
     setIsSubmitting(true);
     setSubmitStatus('idle');
     try {
-      // Simulate API call
-      await new Promise(res => setTimeout(res, 1200));
+      console.log('[Contact Form] Submitting formData:', formData);
+      const response = await fetch('https://stud-pal-ai-mobile-rebuild-xktk.vercel.app/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      console.log('[Contact Form] Response status:', response.status);
+      const responseBody = await response.text();
+      console.log('[Contact Form] Response body:', responseBody);
+      if (!response.ok) {
+        throw new Error('Failed to send message.');
+      }
       setSubmitStatus('success');
       setFormData({ name: '', email: '', subject: '', message: '' });
+      console.log('[Contact Form] Submission successful.');
     } catch (e) {
+      console.log('[Contact Form] Error:', e);
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
+      console.log('[Contact Form] Submission finished.');
     }
   };
 
@@ -50,7 +79,7 @@ const ContactUsScreen = ({ navigation }: any) => {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={80}
+        keyboardVerticalOffset={0}
       >
         <ScrollView contentContainerStyle={[styles.bodyContainer, { backgroundColor: theme.background }]} showsVerticalScrollIndicator={false}>
           {/* Hero Section */}
@@ -93,7 +122,7 @@ const ContactUsScreen = ({ navigation }: any) => {
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>Name</Text>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
+                style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#333' }]}
                 placeholder="Enter your full name"
                 placeholderTextColor={theme.textSecondary}
                 value={formData.name}
@@ -103,21 +132,21 @@ const ContactUsScreen = ({ navigation }: any) => {
             </View>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>Email</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
-                placeholder="your.email@example.com"
-                placeholderTextColor={theme.textSecondary}
-                value={formData.email}
-                onChangeText={v => handleInputChange('email', v)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                editable={!isSubmitting}
-              />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#333' }]}
+              placeholder={formData.email || "your.email@example.com"}
+              placeholderTextColor={theme.textSecondary}
+              value={formData.email}
+              onChangeText={v => handleInputChange('email', v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={!isSubmitting}
+            />
             </View>
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>Subject</Text>
               <TextInput
-                style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
+                style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#333' }]}
                 placeholder="How can we help you?"
                 placeholderTextColor={theme.textSecondary}
                 value={formData.subject}
@@ -128,7 +157,7 @@ const ContactUsScreen = ({ navigation }: any) => {
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.text }]}>Message</Text>
               <TextInput
-                style={[styles.input, { height: 100, textAlignVertical: 'top', backgroundColor: theme.card, color: theme.text, borderColor: theme.border }]}
+                style={[styles.input, { height: 100, textAlignVertical: 'top', backgroundColor: theme.card, color: theme.text, borderColor: '#333' }]}
                 placeholder="Tell us more about your question or feedback..."
                 placeholderTextColor={theme.textSecondary}
                 value={formData.message}
@@ -255,7 +284,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181b',
     color: '#fff',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#fff', // white border
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
