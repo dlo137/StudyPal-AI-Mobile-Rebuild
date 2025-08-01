@@ -47,5 +47,8 @@
     "dotenv-cli": "^8.0.0",
     "typescript": "~5.8.3"
   },
+  "overrides": {
+    "@stripe/stripe-react-native": "0.45.0"
+  },
   "private": true
 }
