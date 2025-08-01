@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   },
   cardBtnText: { color: '#fff', fontSize: 11 },
   cardBtnTextCurrent: { color: '#fff', fontSize: 11 },
-  bottomCta: { marginTop: 12, alignItems: 'stretch', paddingHorizontal: 18, width: '100%', flexDirection: 'row', boxSizing: 'border-box' },
+  bottomCta: { marginTop: 12, alignItems: 'stretch', paddingHorizontal: 18, width: '100%', flexDirection: 'row' },
   trialBtn: {
     flex: 1,
     backgroundColor: '#8C52FF',

@@ -4,6 +4,7 @@ import { useTheme } from '../context/ThemeContext';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome5, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,11 +19,12 @@ type RootStackParamList = {
 };
 
 type ProfileScreenProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList>;
+  navigation?: NativeStackNavigationProp<RootStackParamList>;
   route?: RouteProp<RootStackParamList, any>;
 };
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme, setTheme } = useTheme();
   const isDarkMode = theme.mode === 'dark';
   const { user } = useAuth();
