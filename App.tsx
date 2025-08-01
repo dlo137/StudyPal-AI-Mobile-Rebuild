@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto'
+import registerNNPushToken from 'native-notify';
 
 
 import * as React from 'react';
@@ -47,6 +48,8 @@ LogBox.ignoreLogs(['Unsupported top level event type \"topInsetsChange\" dispatc
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  registerNNPushToken(31513, 'L078ZkWOWbfwT6GX7hSh6v');
+  
   const [refreshKey, setRefreshKey] = React.useState(0);
 
   // Expose global refresh function

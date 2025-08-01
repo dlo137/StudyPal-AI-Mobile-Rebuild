@@ -1,9 +1,41 @@
 // app.config.js
 export default {
   expo: {
-    // ...other config...
+    name: "StudyPal AI",
+    slug: "studypal-ai-mobile-backend",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "light",
+    newArchEnabled: true,
+    splash: {
+      image: "./assets/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#ffffff"
+    },
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.studypal.aihomework",
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false
+      }
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#ffffff"
+      },
+      edgeToEdgeEnabled: true
+    },
+    web: {
+      favicon: "./assets/favicon.png"
+    },
+    scheme: "studypal",
     extra: {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      eas: {
+        projectId: "b4403e91-5a15-439e-8f4a-df74c8f7f907"
+      }
     },
   },
 };
