@@ -21,6 +21,7 @@ export default {
       }
     },
     android: {
+      package: "com.studypal.aihomework",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
