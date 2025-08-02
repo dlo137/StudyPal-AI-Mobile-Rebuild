@@ -33,7 +33,14 @@ export default {
     },
     scheme: "studypal",
     plugins: [
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "your.merchant.id",
+          "enableGooglePay": true
+        }
+      ]
     ],
     extra: {
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
