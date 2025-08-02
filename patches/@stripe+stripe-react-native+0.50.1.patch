@@ -1,8 +1,8 @@
 diff --git a/node_modules/@stripe/stripe-react-native/src/specs/NativeStripeSdkModule.ts b/node_modules/@stripe/stripe-react-native/src/specs/NativeStripeSdkModule.ts
-index a61a747..e8eb73e 100644
+index a61a747..ae1a086 100644
 --- a/node_modules/@stripe/stripe-react-native/src/specs/NativeStripeSdkModule.ts
 +++ b/node_modules/@stripe/stripe-react-native/src/specs/NativeStripeSdkModule.ts
-@@ -189,10 +189,6 @@ export interface Spec extends TurboModule {
+@@ -189,13 +189,6 @@ export interface Spec extends TurboModule {
    clearEmbeddedPaymentOption(viewTag: Int32): Promise<void>;
  
    // Events
@@ -10,6 +10,9 @@ index a61a747..e8eb73e 100644
 -    paymentMethod: UnsafeObject<PaymentMethod.Result>;
 -    shouldSavePaymentMethod: boolean;
 -  }>;
-   onFinancialConnectionsEvent: EventEmitter<
-     UnsafeObject<FinancialConnectionsEvent>
-   >;
+-  onFinancialConnectionsEvent: EventEmitter<
+-    UnsafeObject<FinancialConnectionsEvent>
+-  >;
+   onOrderTrackingCallback: EventEmitter<void>;
+   onCustomerAdapterFetchPaymentMethodsCallback: EventEmitter<void>;
+   onCustomerAdapterAttachPaymentMethodCallback: EventEmitter<{
