@@ -37,7 +37,7 @@ export default {
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "your.merchant.id",
+          "merchantIdentifier": "merchant.com.studypal.aihomework",
           "enableGooglePay": true
         }
       ]
